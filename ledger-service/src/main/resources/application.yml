@@ -32,9 +32,13 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.paymentledger.ledger.event
+        spring.json.value.default.type: com.paymentledger.ledger.event.TransactionInitiatedEvent
+        spring.json.use.type.headers: false
     producer:
+      # The outbox relay publishes already-serialized JSON text straight from outbox_event rows,
+      # so the producer just moves bytes - no object mapping needed on the way out.
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 management:
   endpoints:
