@@ -1,14 +1,14 @@
 server:
-  port: 8081
+  port: 8082
 
 spring:
   application:
-    name: wallet-service
+    name: ledger-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:paymentledger}?currentSchema=wallet
-    username: ${WALLET_DB_USER:wallet_user}
-    password: ${WALLET_DB_PASSWORD:wallet_pass}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:paymentledger}?currentSchema=ledger
+    username: ${LEDGER_DB_USER:ledger_user}
+    password: ${LEDGER_DB_PASSWORD:ledger_pass}
 
   jpa:
     hibernate:
@@ -16,22 +16,22 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        default_schema: wallet
+        default_schema: ledger
 
   flyway:
-    schemas: wallet
-    default-schema: wallet
+    schemas: ledger
+    default-schema: ledger
     locations: classpath:db/migration
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: wallet-service
+      group-id: ledger-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.paymentledger.wallet.event
+        spring.json.trusted.packages: com.paymentledger.ledger.event
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -43,16 +43,11 @@ management:
         include: health,info,metrics
 
 app:
-  jwt:
-    secret: ${JWT_SECRET:dev-only-secret-do-not-use-in-production-min-32-bytes}
-    expiration-minutes: 60
-  idempotency:
-    ttl-hours: 24
-  outbox:
-    relay:
-      poll-interval-ms: 500
-      batch-size: 50
   kafka:
     topics:
       transaction-initiated: transaction-initiated
       transaction-outcome: transaction-outcome
+  outbox:
+    relay:
+      poll-interval-ms: 500
+      batch-size: 50
