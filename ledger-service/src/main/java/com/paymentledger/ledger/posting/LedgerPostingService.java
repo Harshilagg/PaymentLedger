@@ -59,38 +59,64 @@ public class LedgerPostingService {
 
     private List<LedgerEntry> buildEntries(TransactionInitiatedEvent event) {
         UUID transactionId = event.transactionId();
-        long amount = event.amountMinor();
-        String currency = event.currency();
-        UUID clearingWalletId = ExternalClearingAccount.walletIdFor(currency);
-        UUID clearingAccountId = ExternalClearingAccount.accountIdFor(currency);
+        long fromAmount = event.fromAmountMinor();
+        String fromCurrency = event.fromCurrency();
+        long toAmount = event.toAmountMinor();
+        String toCurrency = event.toCurrency();
 
         return switch (event.transactionType()) {
             case DEPOSIT -> {
                 requireToWallet(event);
+                UUID clearingWalletId = ExternalClearingAccount.walletIdFor(toCurrency);
+                UUID clearingAccountId = ExternalClearingAccount.accountIdFor(toCurrency);
                 yield List.of(
                         new LedgerEntry(transactionId, event.toWalletId(), event.toAccountId(),
-                                Direction.CREDIT, amount, currency),
+                                Direction.CREDIT, toAmount, toCurrency),
                         new LedgerEntry(transactionId, clearingWalletId, clearingAccountId,
-                                Direction.DEBIT, amount, currency));
+                                Direction.DEBIT, toAmount, toCurrency));
             }
             case WITHDRAWAL -> {
                 requireFromWallet(event);
+                UUID clearingWalletId = ExternalClearingAccount.walletIdFor(fromCurrency);
+                UUID clearingAccountId = ExternalClearingAccount.accountIdFor(fromCurrency);
                 yield List.of(
                         new LedgerEntry(transactionId, event.fromWalletId(), event.fromAccountId(),
-                                Direction.DEBIT, amount, currency),
+                                Direction.DEBIT, fromAmount, fromCurrency),
                         new LedgerEntry(transactionId, clearingWalletId, clearingAccountId,
-                                Direction.CREDIT, amount, currency));
+                                Direction.CREDIT, fromAmount, fromCurrency));
             }
             case TRANSFER -> {
                 requireFromWallet(event);
                 requireToWallet(event);
-                yield List.of(
-                        new LedgerEntry(transactionId, event.fromWalletId(), event.fromAccountId(),
-                                Direction.DEBIT, amount, currency),
-                        new LedgerEntry(transactionId, event.toWalletId(), event.toAccountId(),
-                                Direction.CREDIT, amount, currency));
+                yield fromCurrency.equals(toCurrency)
+                        ? List.of(
+                                new LedgerEntry(transactionId, event.fromWalletId(), event.fromAccountId(),
+                                        Direction.DEBIT, fromAmount, fromCurrency),
+                                new LedgerEntry(transactionId, event.toWalletId(), event.toAccountId(),
+                                        Direction.CREDIT, toAmount, toCurrency))
+                        : crossCurrencyTransferEntries(transactionId, event, fromAmount, fromCurrency, toAmount, toCurrency);
             }
         };
+    }
+
+    /**
+     * A LedgerEntry never mixes currencies, so a cross-currency transfer needs two clearing legs
+     * (one per currency) instead of one: debit source, credit the fromCurrency clearing account
+     * (balances the fromCurrency side), debit the toCurrency clearing account, credit destination
+     * (balances the toCurrency side) - see SPEC.md's cross-currency data model.
+     */
+    private List<LedgerEntry> crossCurrencyTransferEntries(UUID transactionId, TransactionInitiatedEvent event,
+                                                             long fromAmount, String fromCurrency,
+                                                             long toAmount, String toCurrency) {
+        return List.of(
+                new LedgerEntry(transactionId, event.fromWalletId(), event.fromAccountId(),
+                        Direction.DEBIT, fromAmount, fromCurrency),
+                new LedgerEntry(transactionId, ExternalClearingAccount.walletIdFor(fromCurrency),
+                        ExternalClearingAccount.accountIdFor(fromCurrency), Direction.CREDIT, fromAmount, fromCurrency),
+                new LedgerEntry(transactionId, ExternalClearingAccount.walletIdFor(toCurrency),
+                        ExternalClearingAccount.accountIdFor(toCurrency), Direction.DEBIT, toAmount, toCurrency),
+                new LedgerEntry(transactionId, event.toWalletId(), event.toAccountId(),
+                        Direction.CREDIT, toAmount, toCurrency));
     }
 
     private void requireFromWallet(TransactionInitiatedEvent event) {

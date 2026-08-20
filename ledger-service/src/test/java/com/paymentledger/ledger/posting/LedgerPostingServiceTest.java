@@ -41,7 +41,8 @@ class LedgerPostingServiceTest {
     @Test
     void depositCreditsTheWalletAndDebitsTheExternalClearingAccount() {
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
-                transactionId, TransactionType.DEPOSIT, null, null, walletId, accountId, 5_000, "USD");
+                transactionId, TransactionType.DEPOSIT, null, null, walletId, accountId,
+                5_000, "USD", 5_000, "USD");
 
         service.post(event);
 
@@ -59,7 +60,8 @@ class LedgerPostingServiceTest {
     @Test
     void withdrawalDebitsTheWalletAndCreditsTheExternalClearingAccount() {
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
-                transactionId, TransactionType.WITHDRAWAL, walletId, accountId, null, null, 3_000, "USD");
+                transactionId, TransactionType.WITHDRAWAL, walletId, accountId, null, null,
+                3_000, "USD", 3_000, "USD");
 
         service.post(event);
 
@@ -79,7 +81,7 @@ class LedgerPostingServiceTest {
         UUID toAccountId = UUID.randomUUID();
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
                 transactionId, TransactionType.TRANSFER, walletId, accountId, toWalletId, toAccountId,
-                1_500, "USD");
+                1_500, "USD", 1_500, "USD");
 
         service.post(event);
 
@@ -91,10 +93,43 @@ class LedgerPostingServiceTest {
     }
 
     @Test
+    void crossCurrencyTransferPostsFourEntriesViaTheFxClearingAccount() {
+        UUID toWalletId = UUID.randomUUID();
+        UUID toAccountId = UUID.randomUUID();
+        // $100.00 -> EUR92.00
+        TransactionInitiatedEvent event = new TransactionInitiatedEvent(
+                transactionId, TransactionType.TRANSFER, walletId, accountId, toWalletId, toAccountId,
+                10_000, "USD", 9_200, "EUR");
+
+        service.post(event);
+
+        List<LedgerEntry> entries = captureSavedEntries();
+        assertThat(entries).hasSize(4);
+        assertThat(entries).filteredOn(e -> e.getCurrency().equals("USD"))
+                .hasSize(2)
+                .allSatisfy(e -> assertThat(e.getAmountMinor()).isEqualTo(10_000));
+        assertThat(entries).filteredOn(e -> e.getCurrency().equals("EUR"))
+                .hasSize(2)
+                .allSatisfy(e -> assertThat(e.getAmountMinor()).isEqualTo(9_200));
+        assertThat(entries).filteredOn(e -> e.getWalletId().equals(walletId))
+                .singleElement()
+                .satisfies(e -> assertThat(e.getDirection()).isEqualTo(Direction.DEBIT));
+        assertThat(entries).filteredOn(e -> e.getWalletId().equals(toWalletId))
+                .singleElement()
+                .satisfies(e -> assertThat(e.getDirection()).isEqualTo(Direction.CREDIT));
+        // the two clearing-account entries land on two DIFFERENT wallet ids (one per currency),
+        // each exactly once - four distinct (wallet, direction) pairs in total, matching the
+        // ledger's uniqueness invariant
+        assertThat(entries).extracting(LedgerEntry::getWalletId).doesNotHaveDuplicates();
+        assertOutcomePublished("TRANSACTION_POSTED");
+    }
+
+    @Test
     void alreadyPostedTransactionIsANoOp() {
         when(ledgerEntryRepository.existsByTransactionId(transactionId)).thenReturn(true);
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
-                transactionId, TransactionType.DEPOSIT, null, null, walletId, accountId, 5_000, "USD");
+                transactionId, TransactionType.DEPOSIT, null, null, walletId, accountId,
+                5_000, "USD", 5_000, "USD");
 
         service.post(event);
 
@@ -107,7 +142,8 @@ class LedgerPostingServiceTest {
         // TRANSFER with no fromWallet - the producer side should never send this, but the
         // consumer must not crash and lose the message if it somehow does.
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
-                transactionId, TransactionType.TRANSFER, null, null, walletId, accountId, 1_000, "USD");
+                transactionId, TransactionType.TRANSFER, null, null, walletId, accountId,
+                1_000, "USD", 1_000, "USD");
 
         service.post(event);
 

@@ -10,6 +10,7 @@ import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.event.TransactionInitiatedEvent;
 import com.paymentledger.wallet.event.TransactionType;
+import com.paymentledger.wallet.fx.FxConverter;
 import com.paymentledger.wallet.outbox.OutboxEvent;
 import com.paymentledger.wallet.outbox.OutboxEventRepository;
 import org.springframework.http.HttpStatus;
@@ -24,9 +25,12 @@ import java.util.UUID;
  * The full saga from SPEC.md: source wallet is the debit leg (reserved atomically with
  * initiation, exactly like withdrawal), destination is credited later on settlement. Only the
  * source wallet's ownership is checked here - transfers move money to someone else's wallet by
- * design, the destination just needs to exist. Cross-currency transfers are deferred to a later
- * build step (they need the FX clearing account and a rate lookup); for now source and
- * destination currency must match.
+ * design, the destination just needs to exist.
+ *
+ * Cross-currency: the source is always reserved and debited in its own currency (that's what
+ * "available balance" means); FxConverter computes what the destination receives in its own
+ * currency at initiation time, so both amounts are fixed and sent to ledger-service together -
+ * there is no second conversion step at settlement.
  *
  * Takes fromWalletId rather than a pre-loaded Wallet for the same reason as WithdrawalService:
  * OptimisticLockRetrier retries this whole method, and the retry only helps if the lookup happens
@@ -38,15 +42,18 @@ public class TransferService {
     private final TransactionRepository transactionRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final WalletRepository walletRepository;
+    private final FxConverter fxConverter;
     private final ObjectMapper objectMapper;
 
     public TransferService(TransactionRepository transactionRepository,
                             OutboxEventRepository outboxEventRepository,
                             WalletRepository walletRepository,
+                            FxConverter fxConverter,
                             ObjectMapper objectMapper) {
         this.transactionRepository = transactionRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.walletRepository = walletRepository;
+        this.fxConverter = fxConverter;
         this.objectMapper = objectMapper;
     }
 
@@ -63,25 +70,25 @@ public class TransferService {
         Wallet toWallet = walletRepository.findById(toWalletId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Destination wallet not found"));
 
-        if (!toWallet.getCurrency().equals(fromWallet.getCurrency())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Cross-currency transfers are not supported yet");
-        }
+        long fromAmountMinor = MoneyMapper.toMinor(amount, fromWallet.getCurrency());
+        long toAmountMinor = fxConverter.convert(fromAmountMinor, fromWallet.getCurrency(), toWallet.getCurrency());
 
-        long amountMinor = MoneyMapper.toMinor(amount, fromWallet.getCurrency());
-
-        fromWallet.reserve(amountMinor);
+        fromWallet.reserve(fromAmountMinor);
         walletRepository.save(fromWallet);
 
         Transaction transaction = Transaction.initiateTransfer(
-                fromWallet.getId(), toWallet.getId(), amountMinor, fromWallet.getCurrency(), idempotencyKey);
+                fromWallet.getId(), toWallet.getId(),
+                fromAmountMinor, fromWallet.getCurrency(),
+                toAmountMinor, toWallet.getCurrency(),
+                idempotencyKey);
         transactionRepository.save(transaction);
 
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
                 transaction.getId(), TransactionType.TRANSFER,
                 fromWallet.getId(), fromWallet.getAccountId(),
                 toWallet.getId(), toWallet.getAccountId(),
-                amountMinor, fromWallet.getCurrency());
+                fromAmountMinor, fromWallet.getCurrency(),
+                toAmountMinor, toWallet.getCurrency());
         outboxEventRepository.save(new OutboxEvent(transaction.getId(), "TRANSACTION_INITIATED", writeJson(event)));
 
         return TransactionResponse.from(transaction);

@@ -49,6 +49,7 @@ public class DepositService {
                 transaction.getId(), TransactionType.DEPOSIT,
                 null, null,
                 wallet.getId(), wallet.getAccountId(),
+                amountMinor, wallet.getCurrency(),
                 amountMinor, wallet.getCurrency());
         outboxEventRepository.save(new OutboxEvent(transaction.getId(), "TRANSACTION_INITIATED", writeJson(event)));
 

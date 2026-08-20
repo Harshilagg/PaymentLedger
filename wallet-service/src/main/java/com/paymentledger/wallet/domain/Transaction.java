@@ -45,6 +45,13 @@ public class Transaction {
     @Column(name = "currency", nullable = false)
     private String currency;
 
+    /** Null for same-currency transactions - see toLegAmountMinor()/toLegCurrency(). */
+    @Column(name = "to_amount_minor")
+    private Long toAmountMinor;
+
+    @Column(name = "to_currency")
+    private String toCurrency;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private TransactionStatus status;
@@ -89,11 +96,25 @@ public class Transaction {
                 currency, idempotencyKey);
     }
 
+    /** Same-currency convenience overload - fromAmount/fromCurrency apply to both legs. */
     public static Transaction initiateTransfer(UUID fromWalletId, UUID toWalletId,
                                                 long amountMinor, String currency,
                                                 String idempotencyKey) {
-        return new Transaction(TransactionType.TRANSFER, fromWalletId, toWalletId, amountMinor,
+        return initiateTransfer(fromWalletId, toWalletId, amountMinor, currency, amountMinor,
                 currency, idempotencyKey);
+    }
+
+    public static Transaction initiateTransfer(UUID fromWalletId, UUID toWalletId,
+                                                long fromAmountMinor, String fromCurrency,
+                                                long toAmountMinor, String toCurrency,
+                                                String idempotencyKey) {
+        Transaction transaction = new Transaction(TransactionType.TRANSFER, fromWalletId, toWalletId,
+                fromAmountMinor, fromCurrency, idempotencyKey);
+        if (!fromCurrency.equals(toCurrency)) {
+            transaction.toAmountMinor = toAmountMinor;
+            transaction.toCurrency = toCurrency;
+        }
+        return transaction;
     }
 
     /**
@@ -104,14 +125,35 @@ public class Transaction {
     public static Transaction initiateReversal(UUID fromWalletId, UUID toWalletId, long amountMinor,
                                                 String currency, String idempotencyKey,
                                                 UUID originalTransactionId) {
+        return initiateReversal(fromWalletId, toWalletId, amountMinor, currency, amountMinor,
+                currency, idempotencyKey, originalTransactionId);
+    }
+
+    public static Transaction initiateReversal(UUID fromWalletId, UUID toWalletId,
+                                                long fromAmountMinor, String fromCurrency,
+                                                long toAmountMinor, String toCurrency,
+                                                String idempotencyKey, UUID originalTransactionId) {
         Transaction reversal = new Transaction(TransactionType.REVERSAL, fromWalletId, toWalletId,
-                amountMinor, currency, idempotencyKey);
+                fromAmountMinor, fromCurrency, idempotencyKey);
+        if (!fromCurrency.equals(toCurrency)) {
+            reversal.toAmountMinor = toAmountMinor;
+            reversal.toCurrency = toCurrency;
+        }
         reversal.originalTransactionId = originalTransactionId;
         return reversal;
     }
 
     public boolean isPending() {
         return status == TransactionStatus.PENDING;
+    }
+
+    /** The credit leg's amount/currency - same as the debit leg unless this is cross-currency. */
+    public long toLegAmountMinor() {
+        return toAmountMinor != null ? toAmountMinor : amountMinor;
+    }
+
+    public String toLegCurrency() {
+        return toCurrency != null ? toCurrency : currency;
     }
 
     /** Must only be called after the guarding isPending() check in the consumer - see class doc. */

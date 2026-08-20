@@ -2,17 +2,22 @@ package com.paymentledger.wallet.transaction;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentledger.wallet.api.dto.TransactionResponse;
+import com.paymentledger.wallet.domain.ExchangeRate;
+import com.paymentledger.wallet.domain.ExchangeRateRepository;
 import com.paymentledger.wallet.domain.InsufficientFundsException;
 import com.paymentledger.wallet.domain.Transaction;
 import com.paymentledger.wallet.domain.TransactionRepository;
 import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
+import com.paymentledger.wallet.fx.FxConverter;
 import com.paymentledger.wallet.outbox.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Currency;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,8 +35,10 @@ class TransferServiceTest {
     private final TransactionRepository transactionRepository = mock(TransactionRepository.class);
     private final OutboxEventRepository outboxEventRepository = mock(OutboxEventRepository.class);
     private final WalletRepository walletRepository = mock(WalletRepository.class);
+    private final ExchangeRateRepository exchangeRateRepository = mock(ExchangeRateRepository.class);
     private final TransferService service = new TransferService(
-            transactionRepository, outboxEventRepository, walletRepository, new ObjectMapper());
+            transactionRepository, outboxEventRepository, walletRepository,
+            new FxConverter(exchangeRateRepository), new ObjectMapper());
 
     private Wallet fromWallet;
     private Wallet toWallet;
@@ -53,6 +60,7 @@ class TransferServiceTest {
         assertThat(fromWallet.getReservedMinor()).isEqualTo(2_500);
         assertThat(response.type()).isEqualTo("TRANSFER");
         assertThat(response.status()).isEqualTo("PENDING");
+        assertThat(response.toAmount()).isNull(); // same-currency - no separate to-leg to report
         verify(walletRepository).save(fromWallet);
         verify(transactionRepository).save(any(Transaction.class));
         verify(outboxEventRepository).save(any());
@@ -85,11 +93,37 @@ class TransferServiceTest {
     }
 
     @Test
-    void crossCurrencyTransfersAreNotYetSupported() {
+    void crossCurrencyTransferConvertsAndReservesOnlyTheSourceLeg() {
         Wallet eurWallet = new Wallet(UUID.randomUUID(), Currency.getInstance("EUR"));
         when(walletRepository.findById(eurWallet.getId())).thenReturn(Optional.of(eurWallet));
+        when(exchangeRateRepository.findFirstByFromCurrencyAndToCurrencyOrderByEffectiveAtDesc("USD", "EUR"))
+                .thenReturn(Optional.of(new ExchangeRate("USD", "EUR",
+                        Instant.parse("2026-01-01T00:00:00Z"), new BigDecimal("0.92000000"))));
 
-        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), eurWallet.getId(), new BigDecimal("10.00"), "key-5"))
+        TransactionResponse response = service.initiateTransfer(
+                fromWallet.getId(), eurWallet.getId(), new BigDecimal("100.00"), "key-5");
+
+        assertThat(fromWallet.getReservedMinor()).isEqualTo(10_000); // reserved in USD, the source currency
+        assertThat(eurWallet.getReservedMinor()).isZero(); // destination is never reserved
+        assertThat(response.amount()).isEqualByComparingTo("100.00");
+        assertThat(response.currency()).isEqualTo("USD");
+        assertThat(response.toAmount()).isEqualByComparingTo("92.00");
+        assertThat(response.toCurrency()).isEqualTo("EUR");
+
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(captor.capture());
+        assertThat(captor.getValue().toLegAmountMinor()).isEqualTo(9_200);
+        assertThat(captor.getValue().toLegCurrency()).isEqualTo("EUR");
+    }
+
+    @Test
+    void crossCurrencyTransferWithNoAvailableRateIsRejected() {
+        Wallet jpyWallet = new Wallet(UUID.randomUUID(), Currency.getInstance("JPY"));
+        when(walletRepository.findById(jpyWallet.getId())).thenReturn(Optional.of(jpyWallet));
+        when(exchangeRateRepository.findFirstByFromCurrencyAndToCurrencyOrderByEffectiveAtDesc("USD", "JPY"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), jpyWallet.getId(), new BigDecimal("10.00"), "key-6"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("422");
     }

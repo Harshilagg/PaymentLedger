@@ -57,7 +57,9 @@ public class SettlementService {
             settle(transaction.getFromWalletId(), transaction.getAmountMinor());
         }
         if (transaction.getToWalletId() != null) {
-            credit(transaction.getToWalletId(), transaction.getAmountMinor());
+            // toLegAmountMinor() is amountMinor for a same-currency transaction and the
+            // separately-converted amount for cross-currency - see Transaction.toLegAmountMinor().
+            credit(transaction.getToWalletId(), transaction.toLegAmountMinor());
         }
         transaction.markCompleted();
         transactionRepository.save(transaction);

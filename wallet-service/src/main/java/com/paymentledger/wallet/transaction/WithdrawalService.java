@@ -64,6 +64,7 @@ public class WithdrawalService {
                 transaction.getId(), TransactionType.WITHDRAWAL,
                 wallet.getId(), wallet.getAccountId(),
                 null, null,
+                amountMinor, wallet.getCurrency(),
                 amountMinor, wallet.getCurrency());
         outboxEventRepository.save(new OutboxEvent(transaction.getId(), "TRANSACTION_INITIATED", writeJson(event)));
 

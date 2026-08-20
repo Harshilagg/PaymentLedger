@@ -62,17 +62,23 @@ public class ReversalService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Transaction has already been reversed");
         }
 
-        // Whatever was credited becomes the debit leg and vice versa.
+        // Whatever was credited becomes the debit leg and vice versa - amounts swap along with
+        // the wallets, reusing the ORIGINAL's already-converted amounts rather than re-quoting a
+        // (possibly now-different) exchange rate. For a same-currency original this is trivially
+        // the same amount on both sides, since toLegAmountMinor()/toLegCurrency() fall back to
+        // amountMinor/currency when there is no separate to-leg.
         UUID reversedFromWalletId = original.getToWalletId();
         UUID reversedToWalletId = original.getFromWalletId();
-        long amountMinor = original.getAmountMinor();
-        String currency = original.getCurrency();
+        long reversedFromAmountMinor = original.toLegAmountMinor();
+        String reversedFromCurrency = original.toLegCurrency();
+        long reversedToAmountMinor = original.getAmountMinor();
+        String reversedToCurrency = original.getCurrency();
 
         UUID reversedFromAccountId = null;
         if (reversedFromWalletId != null) {
             Wallet fromWallet = walletRepository.findById(reversedFromWalletId)
                     .orElseThrow(() -> new IllegalStateException("Wallet " + reversedFromWalletId + " not found"));
-            fromWallet.reserve(amountMinor);
+            fromWallet.reserve(reversedFromAmountMinor);
             walletRepository.save(fromWallet);
             reversedFromAccountId = fromWallet.getAccountId();
         }
@@ -85,14 +91,16 @@ public class ReversalService {
         }
 
         Transaction reversal = Transaction.initiateReversal(reversedFromWalletId, reversedToWalletId,
-                amountMinor, currency, idempotencyKey, originalTransactionId);
+                reversedFromAmountMinor, reversedFromCurrency, reversedToAmountMinor, reversedToCurrency,
+                idempotencyKey, originalTransactionId);
         transactionRepository.save(reversal);
 
         TransactionInitiatedEvent event = new TransactionInitiatedEvent(
                 reversal.getId(), wireTypeFor(reversedFromWalletId, reversedToWalletId),
                 reversedFromWalletId, reversedFromAccountId,
                 reversedToWalletId, reversedToAccountId,
-                amountMinor, currency);
+                reversedFromAmountMinor, reversedFromCurrency,
+                reversedToAmountMinor, reversedToCurrency);
         outboxEventRepository.save(new OutboxEvent(reversal.getId(), "TRANSACTION_INITIATED", writeJson(event)));
 
         return TransactionResponse.from(reversal);
