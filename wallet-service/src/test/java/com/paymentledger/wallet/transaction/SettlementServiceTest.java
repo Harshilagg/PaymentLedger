@@ -76,6 +76,42 @@ class SettlementServiceTest {
     }
 
     @Test
+    void postedTransferSettlesSourceAndCreditsDestination() {
+        Wallet fromWallet = walletWith(10_000);
+        fromWallet.reserve(3_000);
+        Wallet toWallet = walletWith(0);
+        Transaction transaction = Transaction.initiateTransfer(
+                fromWallet.getId(), toWallet.getId(), 3_000, "USD", "key");
+        when(transactionRepository.findById(transaction.getId())).thenReturn(Optional.of(transaction));
+        when(walletRepository.findById(fromWallet.getId())).thenReturn(Optional.of(fromWallet));
+        when(walletRepository.findById(toWallet.getId())).thenReturn(Optional.of(toWallet));
+
+        service.applyOutcome(new TransactionOutcomeEvent(transaction.getId(), OutcomeStatus.POSTED, null));
+
+        assertThat(fromWallet.getBalanceMinor()).isEqualTo(7_000);
+        assertThat(fromWallet.getReservedMinor()).isEqualTo(0);
+        assertThat(toWallet.getBalanceMinor()).isEqualTo(3_000);
+    }
+
+    @Test
+    void failedTransferReleasesTheSourceHoldOnly() {
+        Wallet fromWallet = walletWith(10_000);
+        fromWallet.reserve(3_000);
+        Wallet toWallet = walletWith(0);
+        Transaction transaction = Transaction.initiateTransfer(
+                fromWallet.getId(), toWallet.getId(), 3_000, "USD", "key");
+        when(transactionRepository.findById(transaction.getId())).thenReturn(Optional.of(transaction));
+        when(walletRepository.findById(fromWallet.getId())).thenReturn(Optional.of(fromWallet));
+
+        service.applyOutcome(new TransactionOutcomeEvent(transaction.getId(), OutcomeStatus.FAILED, "destination frozen"));
+
+        assertThat(fromWallet.getBalanceMinor()).isEqualTo(10_000);
+        assertThat(fromWallet.getReservedMinor()).isEqualTo(0);
+        assertThat(toWallet.getBalanceMinor()).isEqualTo(0);
+        verify(walletRepository, never()).findById(toWallet.getId());
+    }
+
+    @Test
     void failedDepositNeedsNoWalletMutationSinceNoHoldWasEverTaken() {
         Wallet toWallet = walletWith(0);
         Transaction transaction = Transaction.initiateDeposit(toWallet.getId(), 5_000, "USD", "key");
