@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentledger.wallet.api.dto.InitiateWithdrawalRequest;
 import com.paymentledger.wallet.api.dto.TransactionResponse;
-import com.paymentledger.wallet.domain.Wallet;
+import com.paymentledger.wallet.concurrency.OptimisticLockRetrier;
 import com.paymentledger.wallet.idempotency.IdempotencyService;
 import com.paymentledger.wallet.transaction.WithdrawalService;
 import jakarta.validation.Valid;
@@ -25,13 +25,16 @@ public class WithdrawalController {
     private final WalletAccess walletAccess;
     private final WithdrawalService withdrawalService;
     private final IdempotencyService idempotencyService;
+    private final OptimisticLockRetrier retrier;
     private final ObjectMapper objectMapper;
 
     public WithdrawalController(WalletAccess walletAccess, WithdrawalService withdrawalService,
-                                 IdempotencyService idempotencyService, ObjectMapper objectMapper) {
+                                 IdempotencyService idempotencyService, OptimisticLockRetrier retrier,
+                                 ObjectMapper objectMapper) {
         this.walletAccess = walletAccess;
         this.withdrawalService = withdrawalService;
         this.idempotencyService = idempotencyService;
+        this.retrier = retrier;
         this.objectMapper = objectMapper;
     }
 
@@ -40,13 +43,14 @@ public class WithdrawalController {
             @PathVariable UUID walletId,
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @Valid @RequestBody InitiateWithdrawalRequest request) {
-        Wallet wallet = walletAccess.loadOwnedWallet(walletId);
+        walletAccess.loadOwnedWallet(walletId); // ownership check only - not reused for the mutation, see WithdrawalService
 
         String canonicalRequest = walletId + ":" + writeJson(request);
 
-        TransactionResponse response = idempotencyService.execute(
-                idempotencyKey, canonicalRequest, TransactionResponse.class,
-                () -> withdrawalService.initiateWithdrawal(wallet, request.amount(), idempotencyKey));
+        TransactionResponse response = retrier.withRetry("withdrawal on wallet " + walletId, () ->
+                idempotencyService.execute(
+                        idempotencyKey, canonicalRequest, TransactionResponse.class,
+                        () -> withdrawalService.initiateWithdrawal(walletId, request.amount(), idempotencyKey)));
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }

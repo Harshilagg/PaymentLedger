@@ -16,12 +16,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Unlike deposit, withdrawal is a debit: the funds are reserved (held) in the same local
  * transaction that validates and initiates the saga, so the check and the deduction from
  * available balance are atomic - this is what makes the no-overdraft guarantee hold under
  * concurrency instead of just in the single-request case. See SPEC.md "Balance reservation".
+ *
+ * Takes a walletId rather than a pre-loaded Wallet on purpose: OptimisticLockRetrier retries this
+ * whole method on a lost @Version race, and a retry only re-reads the current version if the
+ * lookup happens inside this transactional method - a Wallet instance loaded once by the caller
+ * and reused across retries would keep retrying with the same stale version forever.
  */
 @Service
 public class WithdrawalService {
@@ -42,7 +48,9 @@ public class WithdrawalService {
     }
 
     @Transactional
-    public TransactionResponse initiateWithdrawal(Wallet wallet, BigDecimal amount, String idempotencyKey) {
+    public TransactionResponse initiateWithdrawal(UUID walletId, BigDecimal amount, String idempotencyKey) {
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new IllegalStateException("Wallet " + walletId + " not found"));
         long amountMinor = MoneyMapper.toMinor(amount, wallet.getCurrency());
 
         wallet.reserve(amountMinor);

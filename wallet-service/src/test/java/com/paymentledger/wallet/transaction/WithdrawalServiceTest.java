@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.Currency;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class WithdrawalServiceTest {
 
@@ -35,11 +37,12 @@ class WithdrawalServiceTest {
     void setUp() {
         wallet = new Wallet(java.util.UUID.randomUUID(), Currency.getInstance("USD"));
         wallet.credit(10_000);
+        when(walletRepository.findById(wallet.getId())).thenReturn(Optional.of(wallet));
     }
 
     @Test
     void reservesFundsAndInitiatesTheTransactionAtomically() {
-        TransactionResponse response = service.initiateWithdrawal(wallet, new BigDecimal("40.00"), "key-1");
+        TransactionResponse response = service.initiateWithdrawal(wallet.getId(), new BigDecimal("40.00"), "key-1");
 
         assertThat(wallet.getReservedMinor()).isEqualTo(4_000);
         assertThat(wallet.getBalanceMinor()).isEqualTo(10_000);
@@ -52,7 +55,7 @@ class WithdrawalServiceTest {
 
     @Test
     void insufficientFundsRejectsBeforeAnyPersistenceHappens() {
-        assertThatThrownBy(() -> service.initiateWithdrawal(wallet, new BigDecimal("500.00"), "key-2"))
+        assertThatThrownBy(() -> service.initiateWithdrawal(wallet.getId(), new BigDecimal("500.00"), "key-2"))
                 .isInstanceOf(InsufficientFundsException.class);
 
         verify(walletRepository, never()).save(any());

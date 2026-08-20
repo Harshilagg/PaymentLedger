@@ -27,6 +27,10 @@ import java.util.UUID;
  * design, the destination just needs to exist. Cross-currency transfers are deferred to a later
  * build step (they need the FX clearing account and a rate lookup); for now source and
  * destination currency must match.
+ *
+ * Takes fromWalletId rather than a pre-loaded Wallet for the same reason as WithdrawalService:
+ * OptimisticLockRetrier retries this whole method, and the retry only helps if the lookup happens
+ * inside this transactional method so each attempt re-reads the current @Version.
  */
 @Service
 public class TransferService {
@@ -47,11 +51,14 @@ public class TransferService {
     }
 
     @Transactional
-    public TransactionResponse initiateTransfer(Wallet fromWallet, UUID toWalletId, BigDecimal amount,
+    public TransactionResponse initiateTransfer(UUID fromWalletId, UUID toWalletId, BigDecimal amount,
                                                  String idempotencyKey) {
-        if (toWalletId.equals(fromWallet.getId())) {
+        if (toWalletId.equals(fromWalletId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot transfer a wallet to itself");
         }
+
+        Wallet fromWallet = walletRepository.findById(fromWalletId)
+                .orElseThrow(() -> new IllegalStateException("Wallet " + fromWalletId + " not found"));
 
         Wallet toWallet = walletRepository.findById(toWalletId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Destination wallet not found"));

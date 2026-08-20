@@ -40,6 +40,7 @@ class TransferServiceTest {
     void setUp() {
         fromWallet = new Wallet(UUID.randomUUID(), Currency.getInstance("USD"));
         fromWallet.credit(10_000);
+        when(walletRepository.findById(fromWallet.getId())).thenReturn(Optional.of(fromWallet));
         toWallet = new Wallet(UUID.randomUUID(), Currency.getInstance("USD"));
         when(walletRepository.findById(toWallet.getId())).thenReturn(Optional.of(toWallet));
     }
@@ -47,7 +48,7 @@ class TransferServiceTest {
     @Test
     void reservesSourceFundsAndInitiatesTheTransactionAtomically() {
         TransactionResponse response = service.initiateTransfer(
-                fromWallet, toWallet.getId(), new BigDecimal("25.00"), "key-1");
+                fromWallet.getId(), toWallet.getId(), new BigDecimal("25.00"), "key-1");
 
         assertThat(fromWallet.getReservedMinor()).isEqualTo(2_500);
         assertThat(response.type()).isEqualTo("TRANSFER");
@@ -59,7 +60,7 @@ class TransferServiceTest {
 
     @Test
     void insufficientFundsRejectsBeforeAnyPersistenceHappens() {
-        assertThatThrownBy(() -> service.initiateTransfer(fromWallet, toWallet.getId(), new BigDecimal("500.00"), "key-2"))
+        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), toWallet.getId(), new BigDecimal("500.00"), "key-2"))
                 .isInstanceOf(InsufficientFundsException.class);
 
         verify(transactionRepository, never()).save(any());
@@ -71,14 +72,14 @@ class TransferServiceTest {
         UUID missingWalletId = UUID.randomUUID();
         when(walletRepository.findById(missingWalletId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.initiateTransfer(fromWallet, missingWalletId, new BigDecimal("10.00"), "key-3"))
+        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), missingWalletId, new BigDecimal("10.00"), "key-3"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
     }
 
     @Test
     void cannotTransferAWalletToItself() {
-        assertThatThrownBy(() -> service.initiateTransfer(fromWallet, fromWallet.getId(), new BigDecimal("10.00"), "key-4"))
+        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), fromWallet.getId(), new BigDecimal("10.00"), "key-4"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400");
     }
@@ -88,7 +89,7 @@ class TransferServiceTest {
         Wallet eurWallet = new Wallet(UUID.randomUUID(), Currency.getInstance("EUR"));
         when(walletRepository.findById(eurWallet.getId())).thenReturn(Optional.of(eurWallet));
 
-        assertThatThrownBy(() -> service.initiateTransfer(fromWallet, eurWallet.getId(), new BigDecimal("10.00"), "key-5"))
+        assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), eurWallet.getId(), new BigDecimal("10.00"), "key-5"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("422");
     }
