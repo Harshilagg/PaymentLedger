@@ -4,6 +4,7 @@ import com.paymentledger.wallet.domain.Account;
 import com.paymentledger.wallet.domain.AccountRepository;
 import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
+import com.paymentledger.wallet.security.CurrentUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,5 +30,14 @@ public class WalletAccess {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         AccountController.requireOwner(account);
         return wallet;
+    }
+
+    /** Non-throwing check, for endpoints (like reversals) where the caller may own either of two wallets. */
+    public boolean isOwnedWallet(UUID walletId) {
+        return walletRepository.findById(walletId)
+                .map(Wallet::getAccountId)
+                .flatMap(accountRepository::findById)
+                .map(account -> account.getOwnerId().equals(CurrentUser.ownerId()))
+                .orElse(false);
     }
 }

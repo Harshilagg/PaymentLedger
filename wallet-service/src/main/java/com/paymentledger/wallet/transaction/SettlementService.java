@@ -17,9 +17,12 @@ import java.util.UUID;
  * so a duplicate POSTED can't double-settle and a duplicate FAILED can't release the same hold
  * twice - see SPEC.md "Idempotent event consumption".
  *
- * REVERSAL settlement and the optimistic-lock retry loop are both deliberately not here yet -
- * they land with the Reversal flow and the concurrency test suite respectively, later in the
- * build order.
+ * Branches on which of fromWalletId/toWalletId are set rather than on Transaction.type: a debit
+ * leg (settle a hold, or release it on failure) exists whenever fromWalletId is set, a credit leg
+ * whenever toWalletId is set. This is exactly true for DEPOSIT (to only), WITHDRAWAL (from only)
+ * and TRANSFER (both) - and it is exactly as true for REVERSAL, whose fromWalletId/toWalletId are
+ * already the reversed direction by the time ReversalService builds it. No separate REVERSAL case
+ * needed.
  */
 @Service
 public class SettlementService {
@@ -50,27 +53,21 @@ public class SettlementService {
     }
 
     private void applyPosted(Transaction transaction) {
-        switch (transaction.getType()) {
-            case DEPOSIT -> credit(transaction.getToWalletId(), transaction.getAmountMinor());
-            case WITHDRAWAL -> settle(transaction.getFromWalletId(), transaction.getAmountMinor());
-            case TRANSFER -> {
-                settle(transaction.getFromWalletId(), transaction.getAmountMinor());
-                credit(transaction.getToWalletId(), transaction.getAmountMinor());
-            }
-            case REVERSAL -> throw new IllegalStateException("REVERSAL settlement is not implemented yet");
+        if (transaction.getFromWalletId() != null) {
+            settle(transaction.getFromWalletId(), transaction.getAmountMinor());
+        }
+        if (transaction.getToWalletId() != null) {
+            credit(transaction.getToWalletId(), transaction.getAmountMinor());
         }
         transaction.markCompleted();
         transactionRepository.save(transaction);
     }
 
     private void applyFailed(Transaction transaction, String reason) {
-        switch (transaction.getType()) {
-            case DEPOSIT -> {
-                // No hold was ever taken for a deposit (crediting can't overdraft), so there is
-                // nothing to release.
-            }
-            case WITHDRAWAL, TRANSFER -> releaseHold(transaction.getFromWalletId(), transaction.getAmountMinor());
-            case REVERSAL -> throw new IllegalStateException("REVERSAL settlement is not implemented yet");
+        // A credit leg never took a hold (crediting can't overdraft), so there is nothing to
+        // release for it - only a debit leg (fromWalletId set) ever reserved anything.
+        if (transaction.getFromWalletId() != null) {
+            releaseHold(transaction.getFromWalletId(), transaction.getAmountMinor());
         }
         transaction.markCompensating(reason);
         transaction.markFailed(reason);

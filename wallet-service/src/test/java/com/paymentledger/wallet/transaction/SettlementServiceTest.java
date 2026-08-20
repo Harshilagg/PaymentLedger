@@ -112,6 +112,23 @@ class SettlementServiceTest {
     }
 
     @Test
+    void postedReversalOfADepositSettlesTheHoldTakenAtReversalInitiation() {
+        // Reversal of a deposit is debit-shaped: fromWalletId set, toWalletId null - the same
+        // shape a withdrawal has, so it must settle the same way.
+        Wallet wallet = walletWith(5_000);
+        wallet.reserve(5_000); // ReversalService already took this hold at initiation
+        Transaction reversal = Transaction.initiateReversal(
+                wallet.getId(), null, 5_000, "USD", "key", UUID.randomUUID());
+        when(transactionRepository.findById(reversal.getId())).thenReturn(Optional.of(reversal));
+        when(walletRepository.findById(wallet.getId())).thenReturn(Optional.of(wallet));
+
+        service.applyOutcome(new TransactionOutcomeEvent(reversal.getId(), OutcomeStatus.POSTED, null));
+
+        assertThat(wallet.getBalanceMinor()).isEqualTo(0);
+        assertThat(wallet.getReservedMinor()).isEqualTo(0);
+    }
+
+    @Test
     void failedDepositNeedsNoWalletMutationSinceNoHoldWasEverTaken() {
         Wallet toWallet = walletWith(0);
         Transaction transaction = Transaction.initiateDeposit(toWallet.getId(), 5_000, "USD", "key");

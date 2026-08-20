@@ -96,6 +96,20 @@ public class Transaction {
                 currency, idempotencyKey);
     }
 
+    /**
+     * fromWalletId/toWalletId here are already the REVERSED direction relative to the original
+     * transaction (whatever was credited becomes the debit leg and vice versa) - the caller
+     * works that out, this just records it under type REVERSAL with the link back.
+     */
+    public static Transaction initiateReversal(UUID fromWalletId, UUID toWalletId, long amountMinor,
+                                                String currency, String idempotencyKey,
+                                                UUID originalTransactionId) {
+        Transaction reversal = new Transaction(TransactionType.REVERSAL, fromWalletId, toWalletId,
+                amountMinor, currency, idempotencyKey);
+        reversal.originalTransactionId = originalTransactionId;
+        return reversal;
+    }
+
     public boolean isPending() {
         return status == TransactionStatus.PENDING;
     }
