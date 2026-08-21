@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  wallet-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      # GitHub-hosted runners come with Docker pre-installed, which is what
+      # WalletConcurrencyIT and TransactionOutcomeRedeliveryIT need
+      # (Testcontainers starts real Postgres/Kafka containers for them).
+      - name: Run tests
+        working-directory: wallet-service
+        run: mvn -B test
+
+  ledger-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      # TransactionInitiatedRedeliveryIT needs the same Docker-backed
+      # Testcontainers setup as above.
+      - name: Run tests
+        working-directory: ledger-service
+        run: mvn -B test
