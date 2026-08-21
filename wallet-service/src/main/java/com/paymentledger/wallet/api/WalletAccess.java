@@ -6,6 +6,7 @@ import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.security.CurrentUser;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -39,5 +40,15 @@ public class WalletAccess {
                 .flatMap(accountRepository::findById)
                 .map(account -> account.getOwnerId().equals(CurrentUser.ownerId()))
                 .orElse(false);
+    }
+
+    /** A transaction's two legs can belong to different owners (e.g. a transfer) - being a party
+     * to either side is enough to read it. Used by ReversalController and TransactionController. */
+    public void requireParty(UUID fromWalletId, UUID toWalletId) {
+        boolean isParty = (fromWalletId != null && isOwnedWallet(fromWalletId))
+                || (toWalletId != null && isOwnedWallet(toWalletId));
+        if (!isParty) {
+            throw new AccessDeniedException("Not a party to this transaction");
+        }
     }
 }

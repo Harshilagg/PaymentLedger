@@ -9,7 +9,6 @@ import com.paymentledger.wallet.transaction.ReversalService;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -44,11 +43,7 @@ public class ReversalController {
         Transaction original = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-        boolean isParty = (original.getFromWalletId() != null && walletAccess.isOwnedWallet(original.getFromWalletId()))
-                || (original.getToWalletId() != null && walletAccess.isOwnedWallet(original.getToWalletId()));
-        if (!isParty) {
-            throw new AccessDeniedException("Not a party to transaction " + transactionId);
-        }
+        walletAccess.requireParty(original.getFromWalletId(), original.getToWalletId());
 
         String canonicalRequest = transactionId.toString();
 
