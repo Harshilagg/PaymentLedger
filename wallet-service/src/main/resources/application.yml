@@ -52,6 +52,7 @@ app:
     expiration-minutes: 60
   idempotency:
     ttl-hours: 24
+    cleanup-interval-ms: 3600000
   optimistic-lock:
     max-retries: 5
   outbox:
