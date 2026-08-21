@@ -11,6 +11,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -21,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +32,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * The single test that proves the whole "ACID + optimistic locking + no overdraft" claim from
@@ -46,6 +53,23 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.hikari.maximum-pool-size=32"
 })
 class WalletConcurrencyIT {
+
+    /**
+     * Kafka's autoconfiguration is excluded above, but OutboxRelay is still a normal @Component
+     * that gets wired into the context and needs SOME KafkaTemplate bean to exist, or the whole
+     * context fails to start. A harmless mock stands in - this test never asserts anything about
+     * what gets published, only about the wallet-side reservation math.
+     */
+    @TestConfiguration
+    static class NoKafkaConfig {
+        @Bean
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafkaTemplate() {
+            KafkaTemplate<String, String> template = mock(KafkaTemplate.class);
+            when(template.send(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+            return template;
+        }
+    }
 
     private static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");

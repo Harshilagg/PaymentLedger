@@ -39,8 +39,12 @@ import static org.awaitility.Awaitility.await;
 class TransactionInitiatedRedeliveryIT {
 
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    // Testcontainers' KafkaContainer is built against confluentinc/cp-kafka by default and
+    // refuses to start with a different image family unless told they're compatible - the
+    // official apache/kafka image works fine, it just isn't the one Testcontainers assumes.
     private static final KafkaContainer KAFKA =
-            new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0"));
+            new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0")
+                    .asCompatibleSubstituteFor("confluentinc/cp-kafka"));
 
     @BeforeAll
     static void startContainers() {
