@@ -21,7 +21,7 @@ jobs:
       # (Testcontainers starts real Postgres/Kafka containers for them).
       - name: Run tests
         working-directory: wallet-service
-        run: mvn -B test
+        run: mvn -B verify
 
   ledger-service:
     runs-on: ubuntu-latest
@@ -36,4 +36,4 @@ jobs:
       # Testcontainers setup as above.
       - name: Run tests
         working-directory: ledger-service
-        run: mvn -B test
+        run: mvn -B verify

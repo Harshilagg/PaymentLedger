@@ -119,6 +119,26 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <!--
+                *Test.java (unit tests) runs under `mvn test` via Surefire, by Maven's default
+                naming convention. *IT.java (integration tests - the Testcontainers-backed ones)
+                is a SEPARATE convention meant for `mvn verify` via Failsafe, which Surefire never
+                picks up on its own even though it compiles them - without this plugin, `mvn test`
+                silently never executes TransactionInitiatedRedeliveryIT at all, success or
+                failure.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
