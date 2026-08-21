@@ -18,9 +18,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
@@ -44,12 +44,12 @@ import static org.awaitility.Awaitility.await;
 class TransactionOutcomeRedeliveryIT {
 
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
-    // Testcontainers' KafkaContainer is built against confluentinc/cp-kafka by default and
-    // refuses to start with a different image family unless told they're compatible - the
-    // official apache/kafka image works fine, it just isn't the one Testcontainers assumes.
-    private static final KafkaContainer KAFKA =
-            new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0")
-                    .asCompatibleSubstituteFor("confluentinc/cp-kafka"));
+    // org.testcontainers.containers.KafkaContainer (the older class) is hard-wired to Confluent's
+    // image layout (it looks for zookeeper-server-start and /etc/confluent/docker/run inside the
+    // container) and breaks even when told the image is "compatible". This newer
+    // org.testcontainers.kafka.KafkaContainer is the one actually built for the official
+    // apache/kafka image's own KRaft-mode startup.
+    private static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0"));
 
     @BeforeAll
     static void startContainers() {
