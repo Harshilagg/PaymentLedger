@@ -6,6 +6,7 @@ import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.event.OutcomeStatus;
 import com.paymentledger.wallet.event.TransactionOutcomeEvent;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Currency;
@@ -22,7 +23,9 @@ class SettlementServiceTest {
 
     private final TransactionRepository transactionRepository = mock(TransactionRepository.class);
     private final WalletRepository walletRepository = mock(WalletRepository.class);
-    private final SettlementService service = new SettlementService(transactionRepository, walletRepository);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final SettlementService service =
+            new SettlementService(transactionRepository, walletRepository, meterRegistry);
 
     private Wallet walletWith(long balance) {
         Wallet wallet = new Wallet(UUID.randomUUID(), Currency.getInstance("USD"));
@@ -43,6 +46,19 @@ class SettlementServiceTest {
 
         assertThat(toWallet.getBalanceMinor()).isEqualTo(5_000);
         assertThat(transaction.getStatus().name()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void countsSettledTransactionsByTypeAndStatus() {
+        Wallet toWallet = walletWith(0);
+        Transaction transaction = Transaction.initiateDeposit(toWallet.getId(), 5_000, "USD", "key");
+        when(transactionRepository.findById(transaction.getId())).thenReturn(Optional.of(transaction));
+        when(walletRepository.findById(toWallet.getId())).thenReturn(Optional.of(toWallet));
+
+        service.applyOutcome(new TransactionOutcomeEvent(transaction.getId(), OutcomeStatus.POSTED, null));
+
+        assertThat(meterRegistry.counter("transactions.settled", "type", "DEPOSIT", "status", "COMPLETED")
+                .count()).isEqualTo(1.0);
     }
 
     @Test

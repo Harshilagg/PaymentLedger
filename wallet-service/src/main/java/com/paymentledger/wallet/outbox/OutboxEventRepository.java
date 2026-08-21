@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
 
     List<OutboxEvent> findByPublishedFalseOrderByCreatedAtAsc(Limit limit);
+
+    long countByPublishedFalse();
 }

@@ -6,6 +6,7 @@ import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.event.OutcomeStatus;
 import com.paymentledger.wallet.event.TransactionOutcomeEvent;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +30,13 @@ public class SettlementService {
 
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final MeterRegistry meterRegistry;
 
-    public SettlementService(TransactionRepository transactionRepository, WalletRepository walletRepository) {
+    public SettlementService(TransactionRepository transactionRepository, WalletRepository walletRepository,
+                              MeterRegistry meterRegistry) {
         this.transactionRepository = transactionRepository;
         this.walletRepository = walletRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -63,6 +67,7 @@ public class SettlementService {
         }
         transaction.markCompleted();
         transactionRepository.save(transaction);
+        countSettled(transaction, "COMPLETED");
     }
 
     private void applyFailed(Transaction transaction, String reason) {
@@ -74,6 +79,13 @@ public class SettlementService {
         transaction.markCompensating(reason);
         transaction.markFailed(reason);
         transactionRepository.save(transaction);
+        countSettled(transaction, "FAILED");
+    }
+
+    private void countSettled(Transaction transaction, String status) {
+        meterRegistry.counter("transactions.settled",
+                "type", transaction.getType().name(),
+                "status", status).increment();
     }
 
     private void credit(UUID walletId, long amountMinor) {
