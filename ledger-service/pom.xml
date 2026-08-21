@@ -35,6 +35,21 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!--
+            No @RestController exists anywhere in this service and none should be added - it's
+            still reached only via Kafka, per the architecture. This is here for two things that
+            turned out to both need spring-web on the classpath: (1) Actuator's HTTP endpoints
+            (health/info/metrics) need an embedded web server to be reachable at all - without
+            one they're JMX-only; (2) Spring Boot's JacksonAutoConfiguration, which supplies the
+            ObjectMapper bean LedgerPostingService injects, is conditional on
+            org.springframework.http.converter.json.Jackson2ObjectMapperBuilder, a spring-web
+            class - without it the context fails to start outright. spring-boot-starter-json
+            alone does not provide that class.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
