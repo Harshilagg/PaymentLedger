@@ -30,7 +30,8 @@ export function TableRow({ className, clickable, ...props }: TableRowProps) {
   return (
     <tr
       className={cn(
-        clickable && "cursor-pointer hover:bg-surface-container-low",
+        clickable &&
+          "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
         className,
       )}
       {...props}

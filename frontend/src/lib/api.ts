@@ -1,3 +1,5 @@
+import type { AccountResponse, TransactionResponse, WalletResponse } from "@/lib/types";
+
 // Money fields are BigDecimal on the backend and Jackson serializes them as bare JSON numbers,
 // which JSON.parse would silently round-trip through a float64. Quoting them in the raw response
 // text before parsing keeps the exact digit string the backend sent (see lib/types.ts).
@@ -53,4 +55,31 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   }
 
   return data as T;
+}
+
+// One function per real wallet-service endpoint (see wallet-service's AccountController,
+// WalletController, TransactionController) - no endpoint is invented, and none of these accept
+// pagination/filter/sort params because the backend doesn't support any.
+export function listAccounts(token: string) {
+  return apiFetch<AccountResponse[]>("/accounts", { token });
+}
+
+export function getAccount(accountId: string, token: string) {
+  return apiFetch<AccountResponse>(`/accounts/${accountId}`, { token });
+}
+
+export function listWallets(accountId: string, token: string) {
+  return apiFetch<WalletResponse[]>(`/accounts/${accountId}/wallets`, { token });
+}
+
+export function getWallet(walletId: string, token: string) {
+  return apiFetch<WalletResponse>(`/wallets/${walletId}`, { token });
+}
+
+export function listWalletTransactions(walletId: string, token: string) {
+  return apiFetch<TransactionResponse[]>(`/wallets/${walletId}/transactions`, { token });
+}
+
+export function getTransaction(transactionId: string, token: string) {
+  return apiFetch<TransactionResponse>(`/transactions/${transactionId}`, { token });
 }
