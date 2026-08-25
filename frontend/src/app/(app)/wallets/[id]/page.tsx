@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthorizedResource } from "@/lib/use-authorized-resource";
 import type { TransactionResponse, WalletResponse } from "@/lib/types";
 import { amountForWallet } from "@/lib/transaction-view";
@@ -14,6 +15,7 @@ import { ErrorBanner } from "@/components/error-banner";
 
 export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">) {
   const { id } = use(params);
+  const router = useRouter();
 
   const wallet = useAuthorizedResource<WalletResponse>(`/wallets/${id}`);
   const transactions = useAuthorizedResource<TransactionResponse[]>(`/wallets/${id}/transactions`);
@@ -77,7 +79,16 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
             {transactions.data.map((tx) => {
               const amount = amountForWallet(tx, id);
               return (
-                <TableRow key={tx.transactionId}>
+                <TableRow
+                  key={tx.transactionId}
+                  clickable
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(`/transactions/${tx.transactionId}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") router.push(`/transactions/${tx.transactionId}`);
+                  }}
+                >
                   <TableCell className="font-mono text-xs">{tx.transactionId}</TableCell>
                   <TableCell>{tx.type}</TableCell>
                   <TableCell>
