@@ -37,18 +37,18 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
                 <WalletStatusBadge status={wallet.data.status} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex flex-col items-end gap-1">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="flex min-w-0 flex-col items-end gap-1">
                 <span className="text-xs text-text-secondary">Balance</span>
-                <AmountDisplay value={wallet.data.balance} currency={wallet.data.currency} size="lg" />
+                <AmountDisplay value={wallet.data.balance} currency={wallet.data.currency} size="lg" wrap />
               </div>
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex min-w-0 flex-col items-end gap-1">
                 <span className="text-xs text-text-secondary">Reserved</span>
-                <AmountDisplay value={wallet.data.reserved} currency={wallet.data.currency} size="lg" />
+                <AmountDisplay value={wallet.data.reserved} currency={wallet.data.currency} size="lg" wrap />
               </div>
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex min-w-0 flex-col items-end gap-1">
                 <span className="text-xs text-text-secondary">Available</span>
-                <AmountDisplay value={wallet.data.available} currency={wallet.data.currency} size="lg" />
+                <AmountDisplay value={wallet.data.available} currency={wallet.data.currency} size="lg" wrap />
               </div>
             </div>
           </CardContent>

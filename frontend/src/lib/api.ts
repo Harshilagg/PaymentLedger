@@ -25,6 +25,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Thrown when fetch() itself fails - offline, DNS failure, connection refused - before any
+ *  HTTP response exists, as distinct from ApiError (a response the server actually sent). */
+export class NetworkError extends Error {
+  constructor() {
+    super("Could not reach the server. Check your connection and try again.");
+  }
+}
+
 interface ApiRequestOptions {
   method?: "GET" | "POST";
   body?: unknown;
@@ -37,11 +45,16 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
 
-  const response = await fetch(`/api${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new NetworkError();
+  }
 
   const text = await response.text();
   const data = text ? parsePreservingMoneyPrecision(text) : undefined;

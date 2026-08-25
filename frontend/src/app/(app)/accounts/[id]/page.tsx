@@ -34,7 +34,9 @@ export default function AccountDetailPage({ params }: PageProps<"/accounts/[id]"
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-text-primary">Wallets</h2>
-        <NewWalletDialog accountId={id} onCreated={wallets.refetch} />
+        {!account.error && !wallets.error ? (
+          <NewWalletDialog accountId={id} onCreated={wallets.refetch} />
+        ) : null}
       </div>
 
       {wallets.loading ? (
