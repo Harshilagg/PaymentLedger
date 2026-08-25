@@ -27,14 +27,24 @@ export function SheetContent({ children, title, description, className }: SheetC
           className,
         )}
       >
-        <RadixDialog.Title className="text-sm font-medium text-text-primary">
-          {title}
-        </RadixDialog.Title>
-        {description ? (
-          <RadixDialog.Description className="mt-1 text-sm text-text-secondary">
-            {description}
-          </RadixDialog.Description>
-        ) : null}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <RadixDialog.Title className="text-sm font-medium text-text-primary">
+              {title}
+            </RadixDialog.Title>
+            {description ? (
+              <RadixDialog.Description className="mt-1 truncate text-sm text-text-secondary">
+                {description}
+              </RadixDialog.Description>
+            ) : null}
+          </div>
+          <RadixDialog.Close
+            aria-label="Close"
+            className="shrink-0 rounded-(--radius-sm) p-1.5 text-lg leading-none text-text-secondary hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            ×
+          </RadixDialog.Close>
+        </div>
         <div className="mt-4 flex-1 overflow-y-auto">{children}</div>
       </RadixDialog.Content>
     </RadixDialog.Portal>

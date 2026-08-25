@@ -99,6 +99,7 @@ export function NewTransactionSheet({ walletId, currency }: { walletId: string; 
                 onClick={() => setType(option)}
                 className={cn(
                   "flex-1 rounded-(--radius-sm) py-1.5 text-xs font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   type === option
                     ? "bg-accent text-accent-foreground"
                     : "text-text-secondary hover:bg-surface-container-low",
