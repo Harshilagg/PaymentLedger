@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens extracted from the approved Stitch "Statement" design system
+ * (light, cool-neutral bank-statement direction; ink-navy single accent).
+ * Primitives must be built on these tokens — no ad-hoc screen styling.
+ */
+:root {
+  /* Surfaces */
+  --color-background: #fcf8f9;
+  --color-surface: #fcf8f9;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f6f3f4;
+  --color-surface-container: #f0edef;
+  --color-surface-container-high: #eae7ea;
+  --color-surface-container-highest: #e4e2e5;
+
+  /* Borders */
+  --color-outline: #7b7a7d;
+  --color-outline-variant: #b3b1b4;
+
+  /* Text */
+  --color-text-primary: #323235;
+  --color-text-secondary: #5f5f61;
+
+  /* Single accent */
+  --color-accent: #14213d;
+  --color-accent-foreground: #f7f7ff;
+
+  /* Semantic status colors — badges only, never decorative */
+  --color-status-pending-bg: #fdf1d6;
+  --color-status-pending-text: #7a5305;
+  --color-status-completed-bg: #dff0e4;
+  --color-status-completed-text: #1e6b3a;
+  --color-status-failed-bg: #fe8983;
+  --color-status-failed-text: #752121;
+  --color-status-compensating-bg: #e2dbfd;
+  --color-status-compensating-text: #4a4562;
+
+  --color-status-active-bg: #dff0e4;
+  --color-status-active-text: #1e6b3a;
+  --color-status-frozen-bg: #dee2f2;
+  --color-status-frozen-text: #33374a;
+  --color-status-closed-bg: #e4e2e5;
+  --color-status-closed-text: #5f5f61;
+
+  /* Error (form validation) */
+  --color-error: #9f403d;
+  --color-error-bg: #fe8983;
+  --color-error-text: #752121;
+
+  /* Radii — restrained, ROUND_FOUR from the design system (never full/pill) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+@theme inline {
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-container-lowest: var(--color-surface-container-lowest);
+  --color-surface-container-low: var(--color-surface-container-low);
+  --color-surface-container: var(--color-surface-container);
+  --color-surface-container-high: var(--color-surface-container-high);
+  --color-surface-container-highest: var(--color-surface-container-highest);
+
+  --color-outline: var(--color-outline);
+  --color-outline-variant: var(--color-outline-variant);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--color-accent-foreground);
+
+  --color-status-pending-bg: var(--color-status-pending-bg);
+  --color-status-pending-text: var(--color-status-pending-text);
+  --color-status-completed-bg: var(--color-status-completed-bg);
+  --color-status-completed-text: var(--color-status-completed-text);
+  --color-status-failed-bg: var(--color-status-failed-bg);
+  --color-status-failed-text: var(--color-status-failed-text);
+  --color-status-compensating-bg: var(--color-status-compensating-bg);
+  --color-status-compensating-text: var(--color-status-compensating-text);
+
+  --color-status-active-bg: var(--color-status-active-bg);
+  --color-status-active-text: var(--color-status-active-text);
+  --color-status-frozen-bg: var(--color-status-frozen-bg);
+  --color-status-frozen-text: var(--color-status-frozen-text);
+  --color-status-closed-bg: var(--color-status-closed-bg);
+  --color-status-closed-text: var(--color-status-closed-text);
+
+  --color-error: var(--color-error);
+  --color-error-bg: var(--color-error-bg);
+  --color-error-text: var(--color-error-text);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Tabular figures everywhere amounts/IDs render in mono, per design direction */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
