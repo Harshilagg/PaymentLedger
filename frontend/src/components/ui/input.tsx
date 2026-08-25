@@ -31,7 +31,7 @@ interface AmountInputProps extends Omit<InputProps, "type" | "inputMode"> {
 }
 
 export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
-  ({ className, currency, ...props }, ref) => {
+  ({ className, currency, error, ...props }, ref) => {
     return (
       <div className="relative">
         <input
@@ -43,9 +43,10 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
             "placeholder:text-text-secondary",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             "disabled:opacity-50 disabled:pointer-events-none",
-            props.error ? "border-error" : "border-outline-variant",
+            error ? "border-error" : "border-outline-variant",
             className,
           )}
+          aria-invalid={error || undefined}
           {...props}
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-sm text-text-secondary">

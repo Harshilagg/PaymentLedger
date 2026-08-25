@@ -83,3 +83,56 @@ export function listWalletTransactions(walletId: string, token: string) {
 export function getTransaction(transactionId: string, token: string) {
   return apiFetch<TransactionResponse>(`/transactions/${transactionId}`, { token });
 }
+
+export function createAccount(token: string) {
+  return apiFetch<AccountResponse>("/accounts", { method: "POST", token });
+}
+
+export function createWallet(accountId: string, currency: string, token: string) {
+  return apiFetch<WalletResponse>(`/accounts/${accountId}/wallets`, {
+    method: "POST",
+    token,
+    body: { currency },
+  });
+}
+
+export function initiateDeposit(walletId: string, amount: string, idempotencyKey: string, token: string) {
+  return apiFetch<TransactionResponse>(`/wallets/${walletId}/deposits`, {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: { amount },
+  });
+}
+
+export function initiateWithdrawal(walletId: string, amount: string, idempotencyKey: string, token: string) {
+  return apiFetch<TransactionResponse>(`/wallets/${walletId}/withdrawals`, {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: { amount },
+  });
+}
+
+export function initiateTransfer(
+  walletId: string,
+  toWalletId: string,
+  amount: string,
+  idempotencyKey: string,
+  token: string,
+) {
+  return apiFetch<TransactionResponse>(`/wallets/${walletId}/transfers`, {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: { toWalletId, amount },
+  });
+}
+
+export function initiateReversal(transactionId: string, idempotencyKey: string, token: string) {
+  return apiFetch<TransactionResponse>(`/transactions/${transactionId}/reversals`, {
+    method: "POST",
+    token,
+    idempotencyKey,
+  });
+}

@@ -4,11 +4,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
+import { isValidUuid } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -27,7 +25,7 @@ export default function LoginPage() {
     event.preventDefault();
     setError(null);
 
-    if (!UUID_PATTERN.test(ownerId.trim())) {
+    if (!isValidUuid(ownerId)) {
       setError("Owner ID must be a valid UUID.");
       return;
     }

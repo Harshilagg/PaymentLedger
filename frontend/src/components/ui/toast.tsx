@@ -14,7 +14,7 @@ interface ToastMessage {
 }
 
 interface ToastContextValue {
-  publish: (toast: Omit<ToastMessage, "id">) => void;
+  publish: (toast: Omit<ToastMessage, "id" | "tone"> & { tone?: ToastTone }) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -33,9 +33,15 @@ const toneClasses: Record<ToastTone, string> = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const publish = useCallback((toast: Omit<ToastMessage, "id">) => {
-    setToasts((current) => [...current, { ...toast, id: Date.now() + Math.random() }]);
-  }, []);
+  const publish = useCallback(
+    (toast: Omit<ToastMessage, "id" | "tone"> & { tone?: ToastTone }) => {
+      setToasts((current) => [
+        ...current,
+        { tone: "default", ...toast, id: Date.now() + Math.random() },
+      ]);
+    },
+    [],
+  );
 
   const remove = useCallback((id: number) => {
     setToasts((current) => current.filter((t) => t.id !== id));
