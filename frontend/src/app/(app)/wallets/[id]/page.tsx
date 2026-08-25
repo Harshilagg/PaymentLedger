@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
+import { NewTransactionSheet } from "@/components/new-transaction-sheet";
 
 export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">) {
   const { id } = use(params);
@@ -54,7 +55,10 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
         </Card>
       ) : null}
 
-      <h2 className="mb-3 text-sm font-medium text-text-primary">Transactions</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-text-primary">Transactions</h2>
+        {wallet.data ? <NewTransactionSheet walletId={id} currency={wallet.data.currency} /> : null}
+      </div>
 
       {transactions.loading ? (
         <div className="flex flex-col gap-2">

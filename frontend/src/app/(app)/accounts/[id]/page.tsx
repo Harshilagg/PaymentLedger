@@ -10,6 +10,7 @@ import { AmountDisplay } from "@/components/ui/amount";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
+import { NewWalletDialog } from "@/components/new-wallet-dialog";
 
 export default function AccountDetailPage({ params }: PageProps<"/accounts/[id]">) {
   const { id } = use(params);
@@ -31,7 +32,10 @@ export default function AccountDetailPage({ params }: PageProps<"/accounts/[id]"
         </div>
       ) : null}
 
-      <h2 className="mb-3 text-sm font-medium text-text-primary">Wallets</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-text-primary">Wallets</h2>
+        <NewWalletDialog accountId={id} onCreated={wallets.refetch} />
+      </div>
 
       {wallets.loading ? (
         <div className="flex flex-col gap-2">

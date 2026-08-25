@@ -9,6 +9,7 @@ import { AmountDisplay } from "@/components/ui/amount";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBanner } from "@/components/error-banner";
+import { ReverseTransactionDialog } from "@/components/reverse-transaction-dialog";
 
 // TransactionResponse has no lines, references, or status-history fields - the double-entry
 // ledger is internal to ledger-service and never exposed over HTTP (Step 1 finding), and status
@@ -25,11 +26,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function TransactionDetailPage({ params }: PageProps<"/transactions/[id]">) {
   const { id } = use(params);
-  const { data: tx, error, loading } = useAuthorizedResource<TransactionResponse>(`/transactions/${id}`);
+  const { data: tx, error, loading, refetch } = useAuthorizedResource<TransactionResponse>(`/transactions/${id}`);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-8">
-      <h1 className="mb-4 text-sm font-medium text-text-primary">Transaction</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-sm font-medium text-text-primary">Transaction</h1>
+        {tx && tx.status === "COMPLETED" ? (
+          <ReverseTransactionDialog transaction={tx} onReversed={refetch} />
+        ) : null}
+      </div>
 
       {loading ? (
         <Skeleton className="h-72 w-full" />
