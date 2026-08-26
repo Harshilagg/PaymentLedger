@@ -85,7 +85,13 @@ public class AuthService {
      * means either the client replayed it or someone else stole it, and we cannot tell which, so
      * we assume theft and cut the whole family off.
      */
-    @Transactional
+    /**
+     * noRollbackFor is load-bearing, not decoration. Reuse detection below revokes the user's
+     * whole token family and then throws - and a throw out of a @Transactional method rolls the
+     * transaction back by default, which would undo that revocation and leave the stolen token
+     * working. The rejection must stick even though the request fails.
+     */
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public AuthResponse refresh(String rawRefreshToken) {
         RefreshToken stored = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
                 .orElseThrow(InvalidCredentialsException::new);

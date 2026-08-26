@@ -44,6 +44,7 @@ services:
       WALLET_DB_PASSWORD: wallet_pass
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_SECRET: local-dev-only-secret-do-not-use-in-production-min-32-bytes
+      LEDGER_SERVICE_URL: http://ledger-service:8082
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,8 +53,11 @@ services:
 
   ledger-service:
     build: ./ledger-service
-    ports:
-      - "8082:8082"
+    # expose, not ports: reachable from wallet-service over the default compose network by service
+    # name, but not published to the host. /internal/ledger/entries performs no authorization of
+    # its own - this is what keeps it off the public surface. See SPEC.md and ledger-service/pom.xml.
+    expose:
+      - "8082"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432

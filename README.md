@@ -14,9 +14,22 @@ Deposit, withdrawal, transfer (same- and cross-currency), and reversal all work 
 docker-compose up -d --build
 ```
 
-This builds and starts Postgres, Kafka, `wallet-service` (port 8081), and `ledger-service` (port 8082, internal-only - no client-facing API). First boot is slower (Maven dependency resolution inside the build, Kafka's internal topics settling); `docker compose logs -f wallet-service` shows `Started WalletServiceApplication` when it's ready.
+This builds and starts Postgres, Kafka, `wallet-service` (port 8081), and `ledger-service` (port 8082, genuinely internal - `expose`d to the compose network but deliberately not published to the host). First boot is slower (Maven dependency resolution inside the build, Kafka's internal topics settling); `docker compose logs -f wallet-service` shows `Started WalletServiceApplication` when it's ready.
 
 Swagger UI for the client-facing API: `http://localhost:8081/swagger-ui.html`
+
+### Reads go direct; writes stay async
+
+`GET /transactions/{id}/ledger-entries` is served by wallet-service calling ledger-service
+synchronously over HTTP (`/internal/ledger/entries`), while every write still travels the saga —
+outbox row, Kafka, and back. The asymmetry is deliberate: a read has no cross-service correctness
+requirement that needs saga semantics, and routing it through the saga would mean inventing a
+query-side event stream and a read model to serve one endpoint.
+
+The cost is a runtime coupling that writes don't have — if ledger-service is down, that one read
+fails while everything else keeps working, which is the right blast radius for it. ledger-service
+performs no authorization of its own, so wallet-service checks that the caller is a party to the
+transaction *before* making the outbound call, and the port is not published to the host.
 
 ### Quick smoke test
 

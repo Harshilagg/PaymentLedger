@@ -36,11 +36,15 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <!--
-            No @RestController exists anywhere in this service and none should be added - it's
-            still reached only via Kafka, per the architecture. This is here for two things that
-            turned out to both need spring-web on the classpath: (1) Actuator's HTTP endpoints
-            (health/info/metrics) need an embedded web server to be reachable at all - without
-            one they're JMX-only; (2) Spring Boot's JacksonAutoConfiguration, which supplies the
+            Writes still arrive only over Kafka - that part of the architecture is unchanged, and
+            no write endpoint should ever be added here. The single @RestController that does
+            exist (LedgerReadController) is read-only and internal: its port is not published by
+            docker-compose, and this service has no security starter, so it authorizes nothing
+            itself and must only ever be called by a service that already has. This dependency is
+            here for two things that both need spring-web: (1) an embedded web server, without
+            which LedgerReadController would not be reachable and Actuator's HTTP endpoints
+            (health/info/metrics) would be JMX-only; (2) Spring Boot's
+            JacksonAutoConfiguration, which supplies the
             ObjectMapper bean LedgerPostingService injects, is conditional on
             org.springframework.http.converter.json.Jackson2ObjectMapperBuilder, a spring-web
             class - without it the context fails to start outright. spring-boot-starter-json

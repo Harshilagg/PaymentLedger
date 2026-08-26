@@ -1,4 +1,13 @@
-import type { AccountResponse, TransactionResponse, WalletResponse } from "@/lib/types";
+import type {
+  AccountResponse,
+  LedgerEntryResponse,
+  PageResponse,
+  TransactionResponse,
+  WalletResponse,
+} from "@/lib/types";
+
+/** Matches the backend's @PageableDefault(size = 20) on the transaction list endpoint. */
+export const TRANSACTIONS_PAGE_SIZE = 20;
 
 // Money fields are BigDecimal on the backend and Jackson serializes them as bare JSON numbers,
 // which JSON.parse would silently round-trip through a float64. Quoting them in the raw response
@@ -191,8 +200,16 @@ export function getWallet(walletId: string, token: string) {
   return apiFetch<WalletResponse>(`/wallets/${walletId}`, { token });
 }
 
-export function listWalletTransactions(walletId: string, token: string) {
-  return apiFetch<TransactionResponse[]>(`/wallets/${walletId}/transactions`, { token });
+/** Paginated: the backend returns a Spring Page envelope, 20 per page, newest first. */
+export function listWalletTransactions(walletId: string, token: string, page = 0) {
+  return apiFetch<PageResponse<TransactionResponse>>(
+    `/wallets/${walletId}/transactions?page=${page}&size=${TRANSACTIONS_PAGE_SIZE}`,
+    { token },
+  );
+}
+
+export function getLedgerEntries(transactionId: string, token: string) {
+  return apiFetch<LedgerEntryResponse[]>(`/transactions/${transactionId}/ledger-entries`, { token });
 }
 
 export function getTransaction(transactionId: string, token: string) {

@@ -146,6 +146,13 @@ class AuthServiceTest {
         assertThat(tokensFor(user.getId())).hasSize(2);
     }
 
+    /**
+     * Note what this test CANNOT prove: the in-memory repository below has no transaction
+     * semantics, so it cannot catch the revocation being rolled back by the exception thrown
+     * immediately after it - which is exactly the bug that shipped and was caught only against a
+     * real database. See AuthService#refresh's noRollbackFor, and ErrorResponseIT, which does
+     * exercise this over a real Postgres.
+     */
     @Test
     void refreshTokenReplayedAfterRotationIsRejectedAndRevokesEveryTokenForThatUser() {
         AppUser user = seedUser();

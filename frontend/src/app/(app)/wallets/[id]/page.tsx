@@ -1,9 +1,10 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthorizedResource } from "@/lib/use-authorized-resource";
-import type { TransactionResponse, WalletResponse } from "@/lib/types";
+import { TRANSACTIONS_PAGE_SIZE } from "@/lib/api";
+import type { PageResponse, TransactionResponse, WalletResponse } from "@/lib/types";
 import { amountForWallet } from "@/lib/transaction-view";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { WalletStatusBadge, TransactionStatusBadge } from "@/components/ui/badge";
@@ -13,13 +14,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
 import { NewTransactionSheet } from "@/components/new-transaction-sheet";
+import { Button } from "@/components/ui/button";
 
 export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">) {
   const { id } = use(params);
   const router = useRouter();
 
+  const [page, setPage] = useState(0);
+
   const wallet = useAuthorizedResource<WalletResponse>(`/wallets/${id}`);
-  const transactions = useAuthorizedResource<TransactionResponse[]>(`/wallets/${id}/transactions`);
+  // The page number is part of the request path, so useAuthorizedResource treats each page as its
+  // own resource and handles the reset-to-loading transition between them without extra state.
+  const transactions = useAuthorizedResource<PageResponse<TransactionResponse>>(
+    `/wallets/${id}/transactions?page=${page}&size=${TRANSACTIONS_PAGE_SIZE}`,
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
@@ -68,7 +76,8 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
         </div>
       ) : transactions.error ? (
         <ErrorBanner error={transactions.error} />
-      ) : transactions.data && transactions.data.length > 0 ? (
+      ) : transactions.data && transactions.data.content.length > 0 ? (
+        <>
         <Table>
           <TableHeader>
             <TableRow>
@@ -80,7 +89,7 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.data.map((tx) => {
+            {transactions.data.content.map((tx) => {
               const amount = amountForWallet(tx, id);
               return (
                 <TableRow
@@ -109,6 +118,39 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
             })}
           </TableBody>
         </Table>
+        {transactions.data.totalPages > 1 ? (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-text-secondary">
+              Page {transactions.data.number + 1} of {transactions.data.totalPages}
+              {" · "}
+              {transactions.data.totalElements} transactions
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                disabled={transactions.data.first}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={transactions.data.last}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        </>
+      ) : page > 0 ? (
+        // Only reachable if rows were removed while paging; recover rather than dead-ending.
+        <EmptyState
+          title="No transactions on this page"
+          description="Go back to see the earlier pages of this wallet's history."
+          action={<Button variant="secondary" onClick={() => setPage(0)}>Back to first page</Button>}
+        />
       ) : (
         <EmptyState title="No transactions yet" description="Deposits, withdrawals, and transfers on this wallet will appear here." />
       )}

@@ -41,3 +41,31 @@ export interface TransactionResponse {
   toWalletId: string | null;
   createdAt: string;
 }
+
+/**
+ * The double-entry rows behind a transaction, from GET /transactions/{id}/ledger-entries.
+ * `amount` is a string for the same reason every other money field is - see the note at the top.
+ */
+export interface LedgerEntryResponse {
+  id: string;
+  walletId: string;
+  direction: "DEBIT" | "CREDIT";
+  amount: string;
+  currency: string;
+  createdAt: string;
+}
+
+/**
+ * Spring's Page envelope. Only the stable top-level members are declared - the nested `pageable`
+ * and `sort` objects are an implementation detail of Spring's serialization and are deliberately
+ * not relied on here.
+ */
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+}
