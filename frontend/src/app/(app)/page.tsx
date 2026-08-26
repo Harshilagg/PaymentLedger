@@ -15,7 +15,7 @@ import { useToast } from "@/components/ui/toast";
 
 export default function AccountsPage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { accessToken: token } = useAuth();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const { data: accounts, error, loading, refetch } = useAuthorizedResource<AccountResponse[]>("/accounts");

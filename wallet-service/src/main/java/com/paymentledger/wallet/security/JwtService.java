@@ -16,33 +16,35 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Issues and verifies the JWTs that stand in for a real IdP in v1 - see SPEC.md non-goals. The
- * subject claim is the account owner's UUID; there is no password or external identity check
- * behind token issuance, only a shape check on the request.
+ * Issues and verifies the short-lived access tokens. The subject claim is the user id, which is
+ * also the account owner id (see AppUser). Access tokens are deliberately not revocable - they
+ * expire in minutes instead, and the revocable half of the pair is the refresh token, which is
+ * checked against the database on every use.
  */
 @Service
 public class JwtService {
 
     private final SecretKey key;
-    private final long expirationMinutes;
+    private final long accessTokenTtlMinutes;
 
     public JwtService(@Value("${app.jwt.secret}") String secret,
-                       @Value("${app.jwt.expiration-minutes}") long expirationMinutes) {
+                       @Value("${app.jwt.access-token-ttl-minutes}") long accessTokenTtlMinutes) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMinutes = expirationMinutes;
+        this.accessTokenTtlMinutes = accessTokenTtlMinutes;
     }
 
-    public String issueToken(UUID ownerId) {
+    public String issueAccessToken(UUID userId) {
         Instant now = Instant.now();
         return Jwts.builder()
-                .subject(ownerId.toString())
+                .id(UUID.randomUUID().toString())
+                .subject(userId.toString())
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
+                .expiration(Date.from(now.plus(accessTokenTtlMinutes, ChronoUnit.MINUTES)))
                 .signWith(key)
                 .compact();
     }
 
-    public Optional<UUID> parseOwnerId(String token) {
+    public Optional<UUID> parseUserId(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)

@@ -1,37 +1,32 @@
 "use client";
 
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { apiFetch } from "@/lib/api";
+import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { login as loginRequest, register as registerRequest, registerAuthBridge, type AuthTokens } from "@/lib/api";
 
-// wallet-service has no user/credential model - POST /auth/token exchanges any ownerId UUID for
-// a JWT scoped to it (see AuthController, TokenRequest, JwtService: 60-minute expiry, subject
-// claim = ownerId). There is nothing to "sign up" for; owning the UUID *is* the identity.
+// wallet-service authenticates with an email/password pair and returns a token pair (see
+// AuthController): a 15-minute access token sent as a bearer header, and a 14-day refresh token
+// that is rotated on every use. userId comes back in the response, so nothing here parses the JWT.
 const STORAGE_KEY = "payment-ledger.auth";
-
-interface StoredAuth {
-  token: string;
-  ownerId: string;
-}
 
 // Module-level cache so getSnapshot returns a stable reference when localStorage hasn't actually
 // changed - useSyncExternalStore re-renders whenever the snapshot reference changes, so a naive
 // "JSON.parse every call" implementation would loop forever.
 let cachedRaw: string | null = null;
-let cachedAuth: StoredAuth | null = null;
+let cachedAuth: AuthTokens | null = null;
 
-function readStoredAuth(): StoredAuth | null {
+function readStoredAuth(): AuthTokens | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (raw === cachedRaw) return cachedAuth;
   cachedRaw = raw;
   try {
-    cachedAuth = raw ? (JSON.parse(raw) as StoredAuth) : null;
+    cachedAuth = raw ? (JSON.parse(raw) as AuthTokens) : null;
   } catch {
     cachedAuth = null;
   }
   return cachedAuth;
 }
 
-function getServerAuthSnapshot(): StoredAuth | null {
+function getServerAuthSnapshot(): AuthTokens | null {
   return null;
 }
 
@@ -46,7 +41,7 @@ function subscribe(listener: () => void) {
   };
 }
 
-function writeStoredAuth(auth: StoredAuth | null) {
+function writeStoredAuth(auth: AuthTokens | null) {
   if (auth) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
   } else {
@@ -67,11 +62,12 @@ function useHasHydrated() {
 }
 
 interface AuthContextValue {
-  token: string | null;
-  ownerId: string | null;
-  /** True once it's safe to trust `token`/`ownerId` (i.e. localStorage has been read). */
+  accessToken: string | null;
+  userId: string | null;
+  /** True once it's safe to trust `accessToken`/`userId` (i.e. localStorage has been read). */
   ready: boolean;
-  login: (ownerId: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -87,17 +83,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const stored = useSyncExternalStore(subscribe, readStoredAuth, getServerAuthSnapshot);
   const ready = useHasHydrated();
 
+  // Lets apiFetch refresh an expired access token and replay the request without every caller
+  // having to know about it. Reads through readStoredAuth rather than closing over `stored` so a
+  // refresh triggered mid-render always spends the current token, not a stale render's copy.
+  useEffect(
+    () =>
+      registerAuthBridge({
+        getTokens: () => readStoredAuth(),
+        onRefreshed: (tokens) => writeStoredAuth(tokens),
+        onRefreshFailed: () => writeStoredAuth(null),
+      }),
+    [],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
-      token: stored?.token ?? null,
-      ownerId: stored?.ownerId ?? null,
+      accessToken: stored?.accessToken ?? null,
+      userId: stored?.userId ?? null,
       ready,
-      login: async (ownerId: string) => {
-        const response = await apiFetch<{ token: string }>("/auth/token", {
-          method: "POST",
-          body: { ownerId },
-        });
-        writeStoredAuth({ token: response.token, ownerId });
+      register: async (email: string, password: string) => {
+        writeStoredAuth(await registerRequest(email, password));
+      },
+      login: async (email: string, password: string) => {
+        writeStoredAuth(await loginRequest(email, password));
       },
       logout: () => writeStoredAuth(null),
     }),

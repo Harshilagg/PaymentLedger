@@ -49,7 +49,8 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-do-not-use-in-production-min-32-bytes}
-    expiration-minutes: 60
+    access-token-ttl-minutes: 15
+    refresh-token-ttl-days: 14
   idempotency:
     ttl-hours: 24
     cleanup-interval-ms: 3600000

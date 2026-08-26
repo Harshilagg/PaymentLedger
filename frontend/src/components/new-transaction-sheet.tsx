@@ -16,7 +16,7 @@ type WriteType = Extract<TransactionType, "DEPOSIT" | "WITHDRAWAL" | "TRANSFER">
 const TYPES: WriteType[] = ["DEPOSIT", "WITHDRAWAL", "TRANSFER"];
 
 export function NewTransactionSheet({ walletId, currency }: { walletId: string; currency: string }) {
-  const { token } = useAuth();
+  const { accessToken: token } = useAuth();
   const router = useRouter();
   const toast = useToast();
 

@@ -21,8 +21,11 @@ Swagger UI for the client-facing API: `http://localhost:8081/swagger-ui.html`
 ### Quick smoke test
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8081/auth/token \
-  -H "Content-Type: application/json" -d '{"ownerId":"<any-uuid>"}' | jq -r .token)
+TOKEN=$(curl -s -X POST http://localhost:8081/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"demo-password"}' | jq -r .accessToken)
+
+# Already registered? Swap /auth/register for /auth/login with the same body.
 
 ACCOUNT_ID=$(curl -s -X POST http://localhost:8081/accounts \
   -H "Authorization: Bearer $TOKEN" | jq -r .id)
@@ -38,6 +41,18 @@ curl -s -X POST http://localhost:8081/wallets/$WALLET_ID/deposits \
 # a few seconds later, once the saga has settled:
 curl -s http://localhost:8081/wallets/$WALLET_ID -H "Authorization: Bearer $TOKEN"
 ```
+
+Access tokens last 15 minutes. To get a fresh pair, POST the `refreshToken` from the response
+above to `/auth/refresh`. Refresh tokens rotate on every use, so the old one stops working the
+moment you use it — and presenting an already-used one revokes every token for that user, on the
+assumption that a token coming back a second time was stolen rather than replayed by accident.
+
+### Accounts that predate real authentication
+
+Owners created under the old mock-token endpoint have a user row backfilled by the `V5` migration
+(one per distinct `owner_id`). They can sign in with email `<owner-id>@example.invalid` and the
+password `dev-password-change-me`. This is a development convenience for existing local data, not
+something that should ever reach a real deployment.
 
 ## Local development without Docker
 

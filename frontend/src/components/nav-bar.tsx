@@ -14,9 +14,9 @@ export function NavBar() {
       <div className="flex min-w-0 items-center gap-3">
         <span
           className="min-w-0 truncate font-mono text-xs text-text-secondary"
-          title={auth.ownerId ?? undefined}
+          title={auth.userId ?? undefined}
         >
-          {auth.ownerId}
+          {auth.userId}
         </span>
         <Button
           variant="ghost"

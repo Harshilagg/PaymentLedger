@@ -10,12 +10,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (auth.ready && !auth.token) {
+    if (auth.ready && !auth.accessToken) {
       router.replace("/login");
     }
-  }, [auth.ready, auth.token, router]);
+  }, [auth.ready, auth.accessToken, router]);
 
-  if (!auth.ready || !auth.token) {
+  if (!auth.ready || !auth.accessToken) {
     return null;
   }
 

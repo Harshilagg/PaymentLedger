@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function NewWalletDialog({ accountId, onCreated }: { accountId: string; onCreated: () => void }) {
-  const { token } = useAuth();
+  const { accessToken: token } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [currency, setCurrency] = useState("");

@@ -22,7 +22,7 @@ const IDLE: ResourceState<never> = { data: null, error: null, loading: false };
  * (rather than an arbitrary fetcher callback) so the effect's dependency array stays exact.
  */
 export function useAuthorizedResource<T>(path: string | null): Resource<T> {
-  const { token, ready } = useAuth();
+  const { accessToken: token, ready } = useAuth();
   const canFetch = ready && Boolean(token) && Boolean(path);
 
   const [refetchNonce, setRefetchNonce] = useState(0);

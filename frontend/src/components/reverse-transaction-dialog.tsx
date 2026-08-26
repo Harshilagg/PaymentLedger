@@ -16,7 +16,7 @@ export function ReverseTransactionDialog({
   transaction: TransactionResponse;
   onReversed: () => void;
 }) {
-  const { token } = useAuth();
+  const { accessToken: token } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
