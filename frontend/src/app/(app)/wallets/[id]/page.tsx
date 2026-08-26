@@ -15,12 +15,20 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
 import { NewTransactionSheet } from "@/components/new-transaction-sheet";
 import { Button } from "@/components/ui/button";
+import { Breadcrumbs, type Crumb } from "@/components/breadcrumbs";
+import { truncateId } from "@/lib/format";
 
 export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">) {
   const { id } = use(params);
   const router = useRouter();
 
   const [page, setPage] = useState(0);
+
+  // Where a transaction row leads. Carrying this wallet in the query string is what lets the
+  // transaction page name the right parent: a transfer touches two wallets and the caller may own
+  // only one of them, so the wallet the user actually came from is the only reliable answer.
+  const transactionHref = (transactionId: string) =>
+    `/transactions/${transactionId}?from=${id}`;
 
   const wallet = useAuthorizedResource<WalletResponse>(`/wallets/${id}`);
   // The page number is part of the request path, so useAuthorizedResource treats each page as its
@@ -29,8 +37,23 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
     `/wallets/${id}/transactions?page=${page}&size=${TRANSACTIONS_PAGE_SIZE}`,
   );
 
+  // The account segment only appears once the wallet has loaded, since accountId comes from it.
+  // Omitted rather than guessed, so the trail never contains a link that goes nowhere.
+  const crumbs: Crumb[] = [{ label: "Accounts", href: "/" }];
+  if (wallet.data) {
+    crumbs.push({
+      label: truncateId(wallet.data.accountId),
+      href: `/accounts/${wallet.data.accountId}`,
+      title: wallet.data.accountId,
+      mono: true,
+    });
+  }
+  crumbs.push({ label: truncateId(id), title: id, mono: true });
+
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
+      <Breadcrumbs items={crumbs} />
+
       {wallet.loading ? (
         <Skeleton className="h-24 w-full" />
       ) : wallet.error ? (
@@ -97,9 +120,9 @@ export default function WalletDetailPage({ params }: PageProps<"/wallets/[id]">)
                   clickable
                   role="link"
                   tabIndex={0}
-                  onClick={() => router.push(`/transactions/${tx.transactionId}`)}
+                  onClick={() => router.push(transactionHref(tx.transactionId))}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") router.push(`/transactions/${tx.transactionId}`);
+                    if (e.key === "Enter") router.push(transactionHref(tx.transactionId));
                   }}
                 >
                   <TableCell className="font-mono text-xs">{tx.transactionId}</TableCell>

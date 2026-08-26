@@ -12,6 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
 import { ReverseTransactionDialog } from "@/components/reverse-transaction-dialog";
+import { Breadcrumbs, type Crumb } from "@/components/breadcrumbs";
+import { truncateId } from "@/lib/format";
+import { isValidUuid } from "@/lib/validation";
 
 // TransactionResponse still has no status-history field - status is a single current value with
 // no audit-trail endpoint behind it - so nothing here invents one. The double-entry rows below
@@ -25,15 +28,37 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function TransactionDetailPage({ params }: PageProps<"/transactions/[id]">) {
+export default function TransactionDetailPage({ params, searchParams }: PageProps<"/transactions/[id]">) {
   const { id } = use(params);
+  // Client component pages read searchParams through use(), same as params - see Next's
+  // app/api-reference/file-conventions/page docs. Avoids useSearchParams and its Suspense boundary.
+  const { from } = use(searchParams);
   const { data: tx, error, loading, refetch } = useAuthorizedResource<TransactionResponse>(`/transactions/${id}`);
   const ledgerEntries = useAuthorizedResource<LedgerEntryResponse[]>(
     `/transactions/${id}/ledger-entries`,
   );
 
+  // Prefer the wallet the user actually navigated from; a transfer has two legs and they may own
+  // only one, so the transaction alone cannot say which is "theirs". Validated before it becomes an
+  // href so a hand-edited query string can't put arbitrary text in the trail. Falling back to the
+  // from-leg is a guess, but the only one available for a directly-pasted URL.
+  const originWallet = typeof from === "string" && isValidUuid(from) ? from : undefined;
+  const parentWallet = originWallet ?? tx?.fromWalletId ?? tx?.toWalletId ?? undefined;
+
+  const crumbs: Crumb[] = [{ label: "Accounts", href: "/" }];
+  if (parentWallet) {
+    crumbs.push({
+      label: truncateId(parentWallet),
+      href: `/wallets/${parentWallet}`,
+      title: parentWallet,
+      mono: true,
+    });
+  }
+  crumbs.push({ label: "Transaction" });
+
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-8">
+      <Breadcrumbs items={crumbs} />
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-sm font-medium text-text-primary">Transaction</h1>
         {tx && tx.status === "COMPLETED" ? (

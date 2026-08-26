@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/error-banner";
 import { NewWalletDialog } from "@/components/new-wallet-dialog";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { truncateId } from "@/lib/format";
 
 export default function AccountDetailPage({ params }: PageProps<"/accounts/[id]">) {
   const { id } = use(params);
@@ -21,6 +23,13 @@ export default function AccountDetailPage({ params }: PageProps<"/accounts/[id]"
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
+      {/* Built from the route param, so it renders even when the account itself fails to load. */}
+      <Breadcrumbs
+        items={[
+          { label: "Accounts", href: "/" },
+          { label: truncateId(id), title: id, mono: true },
+        ]}
+      />
       {account.loading ? (
         <Skeleton className="h-6 w-64" />
       ) : account.error ? (

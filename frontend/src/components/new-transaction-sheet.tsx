@@ -66,7 +66,9 @@ export function NewTransactionSheet({ walletId, currency }: { walletId: string; 
       setOpen(false);
       reset();
       toast.publish({ title: "Transaction submitted", description: `Status: ${response.status}` });
-      router.push(`/transactions/${response.transactionId}`);
+      // Carries the originating wallet so the transaction page's breadcrumb leads back to where
+      // the user actually was - the same reason the wallet's transaction rows carry it.
+      router.push(`/transactions/${response.transactionId}?from=${walletId}`);
     } catch (err) {
       toast.publish({
         title: "Transaction failed",
