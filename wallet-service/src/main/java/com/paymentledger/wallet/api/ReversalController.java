@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -41,9 +40,10 @@ public class ReversalController {
             @PathVariable UUID transactionId,
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey) {
         Transaction original = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Transaction " + transactionId + " not found"));
 
-        walletAccess.requireParty(original.getFromWalletId(), original.getToWalletId());
+        walletAccess.requireParty(original);
 
         String canonicalRequest = transactionId.toString();
 

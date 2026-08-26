@@ -2,14 +2,13 @@ package com.paymentledger.wallet.api;
 
 import com.paymentledger.wallet.domain.Account;
 import com.paymentledger.wallet.domain.AccountRepository;
+import com.paymentledger.wallet.domain.Transaction;
 import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.security.CurrentUser;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /** Shared load-and-ownership-check used by every controller that operates on a wallet directly. */
@@ -24,13 +23,23 @@ public class WalletAccess {
         this.accountRepository = accountRepository;
     }
 
+    /**
+     * "No such wallet" and "someone else's wallet" both raise the same exception with the same
+     * message. Anything that distinguished them would answer the question "is this id real?" for
+     * an id the caller has no business knowing about - see SPEC.md "Error handling".
+     */
     public Wallet loadOwnedWallet(UUID walletId) {
-        Wallet wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        Account account = accountRepository.findById(wallet.getAccountId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        AccountController.requireOwner(account);
-        return wallet;
+        Optional<Wallet> wallet = walletRepository.findById(walletId);
+        boolean owned = wallet
+                .map(Wallet::getAccountId)
+                .flatMap(accountRepository::findById)
+                .filter(AccountController::isOwner)
+                .isPresent();
+
+        if (!owned) {
+            throw new ResourceNotFoundException("Wallet " + walletId + " not found");
+        }
+        return wallet.orElseThrow();
     }
 
     /** Non-throwing check, for endpoints (like reversals) where the caller may own either of two wallets. */
@@ -42,13 +51,20 @@ public class WalletAccess {
                 .orElse(false);
     }
 
-    /** A transaction's two legs can belong to different owners (e.g. a transfer) - being a party
-     * to either side is enough to read it. Used by ReversalController and TransactionController. */
-    public void requireParty(UUID fromWalletId, UUID toWalletId) {
+    /**
+     * A transaction's two legs can belong to different owners (e.g. a transfer) - being a party
+     * to either side is enough to read it. Used by ReversalController and TransactionController.
+     * Takes the whole transaction so the rejection is worded identically to the one a caller gets
+     * for a transaction id that does not exist at all.
+     */
+    public void requireParty(Transaction transaction) {
+        UUID fromWalletId = transaction.getFromWalletId();
+        UUID toWalletId = transaction.getToWalletId();
         boolean isParty = (fromWalletId != null && isOwnedWallet(fromWalletId))
                 || (toWalletId != null && isOwnedWallet(toWalletId));
         if (!isParty) {
-            throw new AccessDeniedException("Not a party to this transaction");
+            throw new ResourceNotFoundException(
+                    "Transaction " + transaction.getId() + " not found");
         }
     }
 }

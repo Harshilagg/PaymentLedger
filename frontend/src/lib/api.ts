@@ -13,15 +13,43 @@ function parsePreservingMoneyPrecision(rawJson: string): unknown {
   return JSON.parse(rawJson.replace(MONEY_FIELD_PATTERN, '"$1":"$2"'));
 }
 
+// Errors are RFC 7807 ProblemDetail (see SPEC.md "Error handling"): the human-readable text is
+// "detail", and validation failures add a field-name -> message map under "errors".
+function problemDetail(data: unknown): string | undefined {
+  if (data && typeof data === "object" && "detail" in data) {
+    const detail = (data as { detail: unknown }).detail;
+    if (typeof detail === "string") return detail;
+  }
+  return undefined;
+}
+
+function fieldErrors(data: unknown): Record<string, string> | undefined {
+  if (data && typeof data === "object" && "errors" in data) {
+    const errors = (data as { errors: unknown }).errors;
+    if (errors && typeof errors === "object" && !Array.isArray(errors)) {
+      return errors as Record<string, string>;
+    }
+  }
+  return undefined;
+}
+
 export class ApiError extends Error {
   readonly status: number;
-  /** Only set for the specific cases GlobalExceptionHandler customizes. */
+  /** The ProblemDetail "detail" member, when the server sent one. */
   readonly serverMessage?: string;
+  /** Field-level messages from a 400, keyed by request field name. */
+  readonly fieldErrors?: Record<string, string>;
 
-  constructor(status: number, reasonPhrase: string, serverMessage?: string) {
+  constructor(
+    status: number,
+    reasonPhrase: string,
+    serverMessage?: string,
+    fieldErrors?: Record<string, string>,
+  ) {
     super(serverMessage ?? reasonPhrase);
     this.status = status;
     this.serverMessage = serverMessage;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -128,11 +156,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       }
     }
 
-    const serverMessage =
-      data && typeof data === "object" && "message" in data
-        ? String((data as { message: unknown }).message)
-        : undefined;
-    throw new ApiError(response.status, response.statusText, serverMessage);
+    throw new ApiError(response.status, response.statusText, problemDetail(data), fieldErrors(data));
   }
 
   return data as T;

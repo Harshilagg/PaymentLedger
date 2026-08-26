@@ -54,17 +54,21 @@ public class WalletController {
                 .toList();
     }
 
+    // Missing wallet and someone else's wallet are answered identically - see SPEC.md
+    // "Error handling" and the same treatment in WalletAccess#loadOwnedWallet.
     @GetMapping("/wallets/{id}")
     public WalletResponse getWallet(@PathVariable UUID id) {
-        Wallet wallet = walletRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        requireOwnedAccount(wallet.getAccountId());
-        return WalletResponse.from(wallet);
+        return walletRepository.findById(id)
+                .filter(wallet -> accountRepository.findById(wallet.getAccountId())
+                        .filter(AccountController::isOwner)
+                        .isPresent())
+                .map(WalletResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet " + id + " not found"));
     }
 
     private Account requireOwnedAccount(UUID accountId) {
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException("Account " + accountId + " not found"));
         AccountController.requireOwner(account);
         return account;
     }

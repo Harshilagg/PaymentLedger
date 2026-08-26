@@ -6,13 +6,11 @@ import com.paymentledger.wallet.domain.AccountRepository;
 import com.paymentledger.wallet.security.CurrentUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -40,17 +38,26 @@ public class AccountController {
                 .toList();
     }
 
+    /**
+     * An account that does not exist and an account belonging to somebody else are answered
+     * identically, down to the message. Splitting them into 404 and 403 would turn this endpoint
+     * into an oracle for "is this a real account id?" - see SPEC.md "Error handling".
+     */
     @GetMapping("/{id}")
     public AccountResponse getAccount(@PathVariable UUID id) {
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        requireOwner(account);
-        return AccountResponse.from(account);
+        return accountRepository.findById(id)
+                .filter(AccountController::isOwner)
+                .map(AccountResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Account " + id + " not found"));
+    }
+
+    static boolean isOwner(Account account) {
+        return account.getOwnerId().equals(CurrentUser.ownerId());
     }
 
     static void requireOwner(Account account) {
-        if (!account.getOwnerId().equals(CurrentUser.ownerId())) {
-            throw new AccessDeniedException("Not the owner of account " + account.getId());
+        if (!isOwner(account)) {
+            throw new ResourceNotFoundException("Account " + account.getId() + " not found");
         }
     }
 }

@@ -5,7 +5,7 @@
 CREATE TABLE app_user (
     id              UUID PRIMARY KEY,
     email           VARCHAR(255) NOT NULL,
-    password_hash   VARCHAR(72) NOT NULL,
+    password_hash   VARCHAR(60) NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_app_user_email UNIQUE (email)
 );
@@ -15,7 +15,7 @@ CREATE TABLE app_user (
 CREATE TABLE refresh_token (
     id              UUID PRIMARY KEY,
     user_id         UUID NOT NULL REFERENCES app_user (id),
-    token_hash      CHAR(64) NOT NULL,
+    token_hash      VARCHAR(64) NOT NULL,
     revoked         BOOLEAN NOT NULL DEFAULT false,
     expires_at      TIMESTAMPTZ NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

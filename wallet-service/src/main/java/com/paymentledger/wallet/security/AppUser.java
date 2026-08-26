@@ -24,10 +24,11 @@ public class AppUser {
     @Id
     private UUID id;
 
-    @Column(name = "email", nullable = false)
+    @Column(name = "email", nullable = false, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    /** Length 60 because that is exactly what bcrypt emits, for every input and every cost. */
+    @Column(name = "password_hash", nullable = false, length = 60)
     private String passwordHash;
 
     @Column(name = "created_at", nullable = false, updatable = false)

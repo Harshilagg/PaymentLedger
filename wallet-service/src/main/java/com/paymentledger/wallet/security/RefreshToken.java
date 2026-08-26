@@ -28,7 +28,8 @@ public class RefreshToken {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "token_hash", nullable = false, updatable = false)
+    /** Length 64 because that is what sha-256 is, in hex. */
+    @Column(name = "token_hash", nullable = false, updatable = false, length = 64)
     private String tokenHash;
 
     @Column(name = "revoked", nullable = false)

@@ -10,6 +10,10 @@ spring:
     username: ${WALLET_DB_USER:wallet_user}
     password: ${WALLET_DB_PASSWORD:wallet_pass}
 
+  mvc:
+    problemdetails:
+      enabled: true
+
   jpa:
     hibernate:
       ddl-auto: validate

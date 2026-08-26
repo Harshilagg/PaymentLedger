@@ -16,6 +16,7 @@ import com.paymentledger.wallet.outbox.OutboxEventRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.paymentledger.wallet.api.ResourceNotFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -68,7 +69,7 @@ public class TransferService {
                 .orElseThrow(() -> new IllegalStateException("Wallet " + fromWalletId + " not found"));
 
         Wallet toWallet = walletRepository.findById(toWalletId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Destination wallet not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Destination wallet not found"));
 
         long fromAmountMinor = MoneyMapper.toMinor(amount, fromWallet.getCurrency());
         long toAmountMinor = fxConverter.convert(fromAmountMinor, fromWallet.getCurrency(), toWallet.getCurrency());

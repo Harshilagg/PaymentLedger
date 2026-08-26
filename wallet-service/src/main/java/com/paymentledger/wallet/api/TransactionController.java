@@ -3,11 +3,9 @@ package com.paymentledger.wallet.api;
 import com.paymentledger.wallet.api.dto.TransactionResponse;
 import com.paymentledger.wallet.domain.Transaction;
 import com.paymentledger.wallet.domain.TransactionRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -32,8 +30,8 @@ public class TransactionController {
     @GetMapping("/transactions/{id}")
     public TransactionResponse getTransaction(@PathVariable UUID id) {
         Transaction transaction = transactionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        walletAccess.requireParty(transaction.getFromWalletId(), transaction.getToWalletId());
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction " + id + " not found"));
+        walletAccess.requireParty(transaction);
         return TransactionResponse.from(transaction);
     }
 

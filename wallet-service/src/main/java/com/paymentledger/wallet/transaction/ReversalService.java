@@ -15,6 +15,7 @@ import com.paymentledger.wallet.outbox.OutboxEventRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.paymentledger.wallet.api.ResourceNotFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
@@ -48,7 +49,7 @@ public class ReversalService {
     @Transactional
     public TransactionResponse initiateReversal(UUID originalTransactionId, String idempotencyKey) {
         Transaction original = transactionRepository.findById(originalTransactionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
 
         if (original.getStatus() != TransactionStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,

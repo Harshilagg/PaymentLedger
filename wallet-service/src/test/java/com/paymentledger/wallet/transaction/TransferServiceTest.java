@@ -1,6 +1,7 @@
 package com.paymentledger.wallet.transaction;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.paymentledger.wallet.api.ResourceNotFoundException;
 import com.paymentledger.wallet.api.dto.TransactionResponse;
 import com.paymentledger.wallet.domain.ExchangeRate;
 import com.paymentledger.wallet.domain.ExchangeRateRepository;
@@ -81,8 +82,8 @@ class TransferServiceTest {
         when(walletRepository.findById(missingWalletId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.initiateTransfer(fromWallet.getId(), missingWalletId, new BigDecimal("10.00"), "key-3"))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("404");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Destination wallet not found");
     }
 
     @Test
