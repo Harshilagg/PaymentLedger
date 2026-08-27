@@ -9,8 +9,8 @@ import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
 import com.paymentledger.wallet.event.OutcomeStatus;
 import com.paymentledger.wallet.event.TransactionOutcomeEvent;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import com.paymentledger.wallet.support.SharedKafka;
+import com.paymentledger.wallet.support.SharedPostgres;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,10 +18,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.kafka.KafkaContainer;
-import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.util.Currency;
@@ -39,36 +35,14 @@ import static org.awaitility.Awaitility.await;
  * "Idempotent event consumption" (the settlement-path half, which the unique constraint on
  * ledger_entry does NOT cover since settlement is an UPDATE, not an INSERT).
  */
-@Testcontainers
 @SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=10")
 class TransactionOutcomeRedeliveryIT {
 
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
-    // org.testcontainers.containers.KafkaContainer (the older class) is hard-wired to Confluent's
-    // image layout (it looks for zookeeper-server-start and /etc/confluent/docker/run inside the
-    // container) and breaks even when told the image is "compatible". This newer
-    // org.testcontainers.kafka.KafkaContainer is the one actually built for the official
-    // apache/kafka image's own KRaft-mode startup.
-    private static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("apache/kafka:3.7.0"));
-
-    @BeforeAll
-    static void startContainers() {
-        POSTGRES.start();
-        KAFKA.start();
-    }
-
-    @AfterAll
-    static void stopContainers() {
-        KAFKA.stop();
-        POSTGRES.stop();
-    }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+        SharedPostgres.registerProperties(registry);
+        SharedKafka.registerProperties(registry);
     }
 
     @Autowired

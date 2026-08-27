@@ -1,7 +1,6 @@
 package com.paymentledger.wallet.api;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import com.paymentledger.wallet.support.SharedPostgres;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,8 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.Map;
 import java.util.UUID;
@@ -38,10 +35,16 @@ import static org.mockito.Mockito.when;
  * perform the servlet container's ERROR dispatch, so it would happily pass whether or not the
  * fix is present, which is the one thing this test exists to detect.
  */
-@Testcontainers
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration")
+        properties = {
+                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
+                // This IT asserts HTTP error shapes and never touches the outbox. Left at its
+                // 500ms default, the relay would poll throughout the run for no reason, and go on
+                // polling from this cached context long after the class finishes.
+                "app.outbox.relay.poll-interval-ms=3600000",
+                "app.idempotency.cleanup-interval-ms=3600000",
+        })
 class ErrorResponseIT {
 
     /** OutboxRelay is a plain @Component and needs some KafkaTemplate for the context to start. */
@@ -56,24 +59,9 @@ class ErrorResponseIT {
         }
     }
 
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @BeforeAll
-    static void startContainer() {
-        POSTGRES.start();
-    }
-
-    @AfterAll
-    static void stopContainer() {
-        POSTGRES.stop();
-    }
-
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        SharedPostgres.registerProperties(registry);
     }
 
     @Autowired

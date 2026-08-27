@@ -5,9 +5,8 @@ import com.paymentledger.wallet.domain.AccountRepository;
 import com.paymentledger.wallet.domain.InsufficientFundsException;
 import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
+import com.paymentledger.wallet.support.SharedPostgres;
 import com.paymentledger.wallet.transaction.WithdrawalService;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,8 +16,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -48,10 +45,14 @@ import static org.mockito.Mockito.when;
  * the wallet go negative under concurrency, which is entirely a wallet-service + Postgres
  * question. Redelivery/outbox correctness has its own dedicated integration tests.
  */
-@Testcontainers
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
-        "spring.datasource.hikari.maximum-pool-size=32"
+        "spring.datasource.hikari.maximum-pool-size=32",
+        // This test measures contention on one wallet; a relay polling the same database every
+        // 500ms is noise in exactly the thing being measured, and it has nothing to publish here
+        // anyway since the KafkaTemplate below is a mock.
+        "app.outbox.relay.poll-interval-ms=3600000",
+        "app.idempotency.cleanup-interval-ms=3600000"
 })
 class WalletConcurrencyIT {
 
@@ -72,24 +73,9 @@ class WalletConcurrencyIT {
         }
     }
 
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @BeforeAll
-    static void startContainer() {
-        POSTGRES.start();
-    }
-
-    @AfterAll
-    static void stopContainer() {
-        POSTGRES.stop();
-    }
-
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        SharedPostgres.registerProperties(registry);
     }
 
     @Autowired
