@@ -1,6 +1,7 @@
 package com.paymentledger.wallet.api;
 
 import com.paymentledger.wallet.support.SharedPostgres;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -66,6 +68,21 @@ class ErrorResponseIT {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    /**
+     * TestRestTemplate defaults to HttpURLConnection, which on a 401 tries to re-authenticate and
+     * resend the request - and throws "cannot retry due to server authentication, in streaming
+     * mode" when the body was streamed rather than buffered. That makes every POST that correctly
+     * answers 401 fail in the client before the test can assert anything, while GETs returning 401
+     * and POSTs returning 400 pass. Nothing to do with the server: it is this test's HTTP client.
+     *
+     * java.net.http.HttpClient, via JdkClientHttpRequestFactory, has no such behaviour and needs
+     * no extra dependency.
+     */
+    @BeforeEach
+    void useAClientThatDoesNotRetryOn401() {
+        restTemplate.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+    }
 
     private String registerAndGetAccessToken() {
         ResponseEntity<Map<String, Object>> response = exchange(
