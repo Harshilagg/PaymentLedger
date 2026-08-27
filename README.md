@@ -71,8 +71,38 @@ something that should ever reach a real deployment.
 
 Requires Java 21, Maven, and Docker (for Postgres + Kafka only).
 
+**Java 21 exactly — not 17, not 24.** Maven runs the compiler and forks test JVMs using whatever
+`JAVA_HOME` points at, so the wrong one fails in a way that doesn't name the real problem:
+
+- **Java 17** → `class file version 65.0 ... only recognizes class file versions up to 61.0`
+  during `mvn verify`. 65.0 is Java 21; 61.0 is Java 17.
+- **Java 24** → compilation fails with `cannot find symbol: getFromWalletId` and similar, because
+  the Lombok that ships with Spring Boot 3.3.4 cannot run on it, so no getters are generated.
+
+On macOS with Homebrew this is worse than it sounds: `openjdk@21` is keg-only, so
+`/usr/libexec/java_home -v 21` does not find it and silently returns a *different* JDK. Point
+`JAVA_HOME` at the Homebrew path directly:
+
+```
+export JAVA_HOME=/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home   # Intel
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home # Apple silicon
+java -version   # must print 21
+```
+
 ```
 docker compose up -d postgres kafka
 cd wallet-service && mvn spring-boot:run
 cd ledger-service && mvn spring-boot:run
 ```
+
+### Running the tests
+
+```
+cd wallet-service && mvn verify     # and the same in ledger-service
+```
+
+`mvn test` runs only the unit tests (`*Test.java`, Surefire). The Testcontainers-backed
+integration tests (`*IT.java`) run under Failsafe, which is bound to `verify` — `mvn test` skips
+them silently. `verify` needs a reachable Docker daemon; Testcontainers starts one Postgres (and
+one Kafka, only for the tests that need it) per module, shared across that module's ITs and left
+running until the JVM exits, where Ryuk removes it.
