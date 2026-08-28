@@ -10,6 +10,7 @@ import com.paymentledger.wallet.domain.Transaction;
 import com.paymentledger.wallet.domain.TransactionRepository;
 import com.paymentledger.wallet.domain.Wallet;
 import com.paymentledger.wallet.domain.WalletRepository;
+import com.paymentledger.wallet.fx.ExchangeRateCache;
 import com.paymentledger.wallet.fx.FxConverter;
 import com.paymentledger.wallet.outbox.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +40,14 @@ class TransferServiceTest {
     private final ExchangeRateRepository exchangeRateRepository = mock(ExchangeRateRepository.class);
     private final TransferService service = new TransferService(
             transactionRepository, outboxEventRepository, walletRepository,
-            new FxConverter(exchangeRateRepository), new ObjectMapper());
+            new FxConverter(exchangeRateRepository, noCache()), new ObjectMapper());
+
+    /** Always-miss cache, so these tests keep exercising the repository path they were written for. */
+    private static ExchangeRateCache noCache() {
+        ExchangeRateCache cache = mock(ExchangeRateCache.class);
+        when(cache.get(any(), any())).thenReturn(java.util.Optional.empty());
+        return cache;
+    }
 
     private Wallet fromWallet;
     private Wallet toWallet;

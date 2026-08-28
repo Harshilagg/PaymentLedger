@@ -81,8 +81,13 @@ app:
     #
     # Load tests raise this deliberately - see docs/PERFORMANCE.md. A limit tuned for real clients
     # would otherwise make the benchmark measure the bucket instead of the system.
-    capacity: 60
-    refill-per-second: 10
+    capacity: ${RATE_LIMIT_CAPACITY:60}
+    refill-per-second: ${RATE_LIMIT_REFILL_PER_SECOND:10}
+  fx-cache:
+    enabled: true
+    # The rate table is seeded and static (V3), so staleness is not a live concern today. The TTL
+    # exists so that if a rate ever does change, a cached copy cannot outlive it indefinitely.
+    ttl: 10m
   outbox:
     relay:
       poll-interval-ms: 500

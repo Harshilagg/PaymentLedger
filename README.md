@@ -42,6 +42,31 @@ on `RateLimiter#degrade`.
 
 Redis is `expose`d to the compose network only and is never published to the host.
 
+### Caching: exchange rates yes, balances never
+
+Exchange rate lookups are cached in Redis, keyed on the currency pair, with a configurable TTL
+(`app.fx-cache.*`). Hit and miss counts are logged so the cache's effect is measurable rather than
+assumed. Same-currency transfers short-circuit before the lookup and never touch it.
+
+**Wallet balances are deliberately not cached, and never should be.** This is a decision, not
+something left undone.
+
+A stale balance in a financial system is a correctness bug, not a performance trade-off. The
+no-overdraft guarantee is enforced by checking available balance and reserving against a row
+protected by an `@Version` column; that check is only meaningful against the current value. Serving
+a balance from a cache would mean a wallet could pass an availability check against a number that
+was already wrong — which is precisely the overdraft the reservation model exists to prevent. The
+window would be small and the failure would be rare, intermittent and financially material: the
+worst combination to debug.
+
+Exchange rates are cacheable for the opposite reasons. They are static reference data seeded by a
+migration with no live feed, six rows that change never; nothing reserves against them; and a stale
+rate within the TTL produces a slightly-off conversion, not a broken invariant. The TTL bounds even
+that.
+
+The distinction is not "how hot is this read" but **"what breaks if this value is out of date"**.
+For a rate, an approximation. For a balance, the ledger.
+
 ### Reads go direct; writes stay async
 
 `GET /transactions/{id}/ledger-entries` is served by wallet-service calling ledger-service

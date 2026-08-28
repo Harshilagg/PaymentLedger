@@ -58,6 +58,28 @@ The likely cause of the throughput variance is the settlement backlog: while it 
 for the same two cores as the API, so a run's numbers depend on how much of the previous phase's
 backlog was still draining underneath it. That is a property of the hardware, not of the code.
 
+> ### Correction — the 2× noise floor above was too optimistic
+>
+> It was derived from two suite runs that happened to share the same scenario ordering, which
+> disguised a larger effect. Re-measuring after commits 2 and 3 found scenarios late in a ~60-minute
+> suite reporting **up to 3.8× lower throughput than the same scenario run on its own**, and
+> recovering completely when re-run in isolation:
+>
+> | Scenario | In-suite (3rd/4th) | Isolated | Recovered to |
+> |---|---:|---:|---:|
+> | read-heavy @80 VU | 16.6 req/s | 41.5 req/s | 2.5× |
+> | cross-currency @80 VU | 6.7 req/s | 20.2 req/s | 3.0× |
+>
+> Nothing in those commits can explain it — read-heavy is 90% reads, and reads skip the rate limiter
+> entirely and never touch the FX cache. `docker compose down -v` resets the database between
+> scenarios but not the host, so sustained load across a long suite degrades something outside the
+> containers (thermal or Docker-side resource pressure are the obvious candidates on a 2-core i3).
+> It is not deterministic: the *first* suite ran the same order without degrading.
+>
+> **Consequence: only isolated, position-matched runs are comparable.** Numbers taken from deep in a
+> back-to-back suite are recorded below as measured, but are marked non-comparable and no conclusion
+> is drawn from them.
+
 ---
 
 ## Acceptance is not settlement
@@ -245,8 +267,102 @@ because the failure mode is easy to reintroduce.
 
 ---
 
+## Before / after: Redis rate limiting and FX caching
+
+### What is being compared, and what that does not allow
+
+Commits 2 and 3 landed together, so **this comparison spans two changes, not one** — a per-user
+token bucket on writes, and a Redis cache for exchange rate lookups. Nothing here can attribute a
+difference to one of them individually.
+
+The measured run raised the rate limit to **capacity 1,000,000 / refill 1,000,000 per second** via
+`RATE_LIMIT_CAPACITY` and `RATE_LIMIT_REFILL_PER_SECOND`, verified to have survived the harness's
+`docker compose down -v`. Without that the run would have measured the size of the bucket rather
+than the system. **The production default is unchanged at 60 / 10.**
+
+Every write now makes one extra Redis round trip for the bucket; every *cross-currency* write makes
+a second for the rate lookup. The expected direction is therefore slightly **slower**, not faster.
+
+### Acceptance throughput (req/s)
+
+Position-matched and isolated runs only, per the correction above.
+
+| Scenario | VUs | Before | After | Read |
+|---|---:|---:|---:|---|
+| Baseline | 5 | 6.8 | 6.9 | no change |
+| | 10 | 13.1 | 14.2 | no change |
+| | 20 | 10.9 | 19.1 | within noise |
+| | 40 | 5.4 | 24.5 | within noise (before row was anomalous) |
+| | 80 | 21.6 | 28.8 | within noise |
+| Read-heavy | 5 | 17.6 | 18.8 | no change |
+| | 10 | 27.2 | 26.0 | no change |
+| | 20 | 33.0 | 14.4 | within noise |
+| | 40 | 40.0 | 33.3 | within noise |
+| | 80 | 48.0 | 41.5 | within noise |
+| Cross-currency | 5 | 5.4 | 5.0 | no change |
+| | 10 | 11.4 | 11.2 | no change |
+| | 20 | 17.4 | 18.7 | no change |
+| | 40 | 19.6 | 20.2 | no change |
+| | 80 | 25.3 | 20.2 | within noise |
+
+**No effect is measurable in either direction.** Adding a Redis round trip to every write did not
+produce a detectable slowdown, which is the useful half of this result: the rate limiter is cheap
+enough to disappear into the noise on hardware where the noise is large.
+
+### Contention — the one comparison that carries weight
+
+The 503 retry-exhaustion rate is the only measurement here reproducible enough to compare, and it is
+unchanged, as it should be — neither commit touches the reservation path.
+
+| VUs | Before (run A) | Before (run B) | After |
+|---:|---:|---:|---:|
+| 1 | 5.12% | 6.15% | 4.28% |
+| 2 | 13.62% | 15.09% | 6.73% |
+| 3 | 24.65% | 22.39% | 19.84% |
+| 5 | 34.80% | 36.00% | 30.82% |
+| 8 | 46.47% | 46.96% | 43.34% |
+| 12 | 43.36% | 41.86% | 43.01% |
+| 20 | 38.85% | 38.97% | 40.49% |
+| 40 | 41.19% | 42.00% | 40.39% |
+
+The plateau above 8 VUs holds across all three runs within ~3 points. The low rungs are noisier
+because they collect far fewer samples. **The wallet-row bottleneck is exactly where it was.**
+
+### The FX cache: a measured null result
+
+**The cache works. It just does not help.**
+
+| | |
+|---|---|
+| Cache hits | 31,987 |
+| Cache misses | 13 |
+| Hit rate | **99.96%** |
+| Redis errors | 10 (during shutdown; served as misses, zero failed transactions) |
+| Cross-currency throughput | unchanged within noise |
+
+Nearly every rate lookup in the run was served from Redis rather than Postgres, and throughput did
+not move. This was [pre-registered in the commit-1 cross-currency
+section](#scenario-4--cross-currency-transfers) before the cache existed, and the reason it was
+predicted is the reason it happened:
+
+`exchange_rate` holds **six rows**. It is read constantly, never written, and comfortably resident
+in Postgres shared buffers — so the query being "eliminated" was already an in-memory lookup behind
+an index. Replacing it with a network round trip to Redis substitutes one fast thing for another
+fast thing. There was no disk I/O to remove because there was never any disk I/O.
+
+This is reported rather than dropped because a null result is the honest output of the measurement,
+and because it is the interesting one: it says the FX lookup was never the bottleneck. The actual
+bottleneck is the one commit 1 identified — a single wallet row serialising against its own
+settlement stream — and no cache addresses that.
+
+**What the cache is still worth:** it is not load-bearing today, but it is the correct shape for a
+rate table that is not six static rows — a live feed, many more pairs, or a table large enough to
+leave shared buffers. The `enabled` flag exists so it can be turned off if it ever costs more than
+it saves. On this hardware, it does neither.
+
 ## Results log
 
 | Date | Commit | What changed |
 |---|---|---|
 | 2026-08-27 | commit 1 | Baseline recorded. No production code changed. |
+| 2026-08-28 | commits 2-3 | Redis rate limiting + FX cache. No measurable throughput effect either way; contention curve unchanged; FX cache 99.96% hit rate with no latency benefit. Noise floor corrected upward. |

@@ -60,6 +60,11 @@ services:
       LEDGER_SERVICE_URL: http://ledger-service:8082
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Overridable so a load-test run can raise the limit above its own arrival rate and measure
+      # the system rather than the bucket. Whatever value a measured run used is recorded in
+      # docs/PERFORMANCE.md alongside its numbers.
+      RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY:-60}
+      RATE_LIMIT_REFILL_PER_SECOND: ${RATE_LIMIT_REFILL_PER_SECOND:-10}
     depends_on:
       postgres:
         condition: service_healthy
