@@ -105,6 +105,30 @@ This is a distinct concern from "Idempotent event consumption" above: this guard
 - **"Doesn't exist" and "exists but isn't yours" both return 404**, with the same body and the same message. This is deliberate. A 404/403 split answers the question "is this a real id?" for ids the caller has no business knowing about, which is enough to enumerate valid accounts, wallets and transactions one probe at a time. The cost is that a legitimate user who mistypes their own wallet id gets "not found" rather than "not yours"; that is the right trade. `ResourceNotFoundException` is the single exception type behind both cases, so the two are indistinguishable by construction rather than by remembering to keep two branches in sync.
 - **The `/error` dispatch is explicitly permitted** in the filter chain (`dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()`). Spring Boot renders errors by forwarding to `/error`, which re-enters the security filter chain as a fresh dispatch carrying no `SecurityContext`. Without that line the forward is judged an unauthenticated request to a protected path and its rejection *overwrites the real response* — which is why this service previously answered every 400, 403 and 404 with a bodyless 403, including for routes that match no controller at all. This is not a hole: an `ERROR` dispatch is container-internal and cannot be requested from outside.
 
+## Rate limiting
+
+- **Token bucket per authenticated user**, applied to write methods only. Reads are unlimited.
+  Capacity is the burst a user may spend at once; refill rate is the sustained rate they settle back
+  to. Both live in `application.yml`.
+- **The decision is a Lua script executed inside Redis**, not Java. Redis runs a script atomically,
+  so the read, the decision and the write happen without interleaving. A read-modify-write from the
+  application would be three round trips, and two concurrent requests could both observe the same
+  remaining count and both be allowed — letting a user exceed capacity precisely when they are
+  trying hardest to, which is the case the limiter exists for.
+- **Rejections are 429 with an RFC 7807 body**, written through the same `ProblemDetailSupport`
+  helper as every other filter-chain error, plus `Retry-After` and
+  `X-RateLimit-Limit`/`-Remaining`/`-Reset`. Those three headers are sent on **every** limited
+  response, not only rejections, so a client can pace itself before being told no.
+- **`/auth/**` is not rate limited.** It is unauthenticated, so there is no user to key a bucket on.
+  Limiting it would need a different key and a different failure policy, and nothing here should be
+  mistaken for protection against credential stuffing.
+- **When Redis is unreachable the limiter fails open** — the request is allowed and a throttled WARN
+  is logged. Every correctness guarantee in this system (no-overdraft, exactly-once posting, saga
+  compensation) lives in Postgres and none depend on Redis, so the limiter is a protective control,
+  not a correctness one. Failing closed would turn a cache outage into a total write outage, which
+  is a worse incident than the abuse being prevented. The full argument, including the case against
+  it, is on `RateLimiter#degrade`.
+
 ## Testing strategy
 
 - **Unit tests** (JUnit 5 + Mockito): business logic in isolation — balance/reservation validation, saga step handlers, idempotency conflict detection, reversal entry generation — with repositories/Kafka producers mocked.
@@ -114,7 +138,8 @@ This is a distinct concern from "Idempotent event consumption" above: this guard
 ## Non-goals (explicit, documented — not oversights)
 
 - Fraud detection / AML / sanctions screening.
-- Rate limiting.
+- ~~Rate limiting.~~ **No longer a non-goal** — a Redis token bucket now limits authenticated write
+  endpoints. See "Rate limiting" below.
 - Real-time FX rate feeds (static seeded table only).
 - notification-service. A Kafka consumer that persists rows and exposes a GET endpoint repeats the consumer pattern already proven in ledger-service without introducing a new correctness problem. Scoped out to keep the surface area focused on transactional correctness.
 - Building an actual identity provider (JWTs are issued by a minimal mock auth flow, not a full IdP).

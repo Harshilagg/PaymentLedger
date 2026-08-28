@@ -18,6 +18,30 @@ This builds and starts Postgres, Kafka, `wallet-service` (port 8081), and `ledge
 
 Swagger UI for the client-facing API: `http://localhost:8081/swagger-ui.html`
 
+### Rate limiting
+
+Write endpoints are rate limited per authenticated user by a Redis token bucket (`app.rate-limit.*`
+in `application.yml`). Reads are unlimited. Exceeding it returns **429** with an RFC 7807 body,
+`Retry-After`, and `X-RateLimit-Limit` / `-Remaining` / `-Reset`; those three headers are on every
+limited response, not just rejections.
+
+```bash
+curl -i -X POST localhost:8081/accounts -H "Authorization: Bearer $TOKEN"
+# HTTP/1.1 429
+# X-RateLimit-Limit: 60
+# X-RateLimit-Remaining: 0
+# X-RateLimit-Reset: 6
+# Retry-After: 1
+# Content-Type: application/problem+json
+```
+
+The bucket is evaluated by a Lua script inside Redis so the check, decrement and expiry are atomic —
+see SPEC.md for why a read-modify-write from Java would defeat the point. **If Redis is unreachable
+the limiter fails open** and logs a throttled WARN; the reasoning, and the argument against it, are
+on `RateLimiter#degrade`.
+
+Redis is `expose`d to the compose network only and is never published to the host.
+
 ### Reads go direct; writes stay async
 
 `GET /transactions/{id}/ledger-entries` is served by wallet-service calling ledger-service

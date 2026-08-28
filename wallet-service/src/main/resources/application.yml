@@ -15,6 +15,11 @@ spring:
       enabled: true
 
   data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 200ms          # a slow limiter must not become a slow API - see RateLimiter
+      connect-timeout: 200ms
     web:
       pageable:
         max-page-size: 100
@@ -67,6 +72,17 @@ app:
     cleanup-interval-ms: 3600000
   optimistic-lock:
     max-retries: 5
+  rate-limit:
+    enabled: true
+    # Token bucket per authenticated user, on write endpoints only.
+    #
+    # capacity is the burst a user may spend at once; refill-per-second is the sustained rate they
+    # settle back to. 60/10 means "up to 60 writes in a burst, then 10/sec".
+    #
+    # Load tests raise this deliberately - see docs/PERFORMANCE.md. A limit tuned for real clients
+    # would otherwise make the benchmark measure the bucket instead of the system.
+    capacity: 60
+    refill-per-second: 10
   outbox:
     relay:
       poll-interval-ms: 500

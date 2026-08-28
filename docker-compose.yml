@@ -32,6 +32,19 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
+  redis:
+    image: redis:7-alpine
+    # expose, not ports: reachable from wallet-service by service name, never published to the
+    # host. Same reasoning as ledger-service - it holds rate-limit buckets and cached FX rates and
+    # has no authentication of its own, so the compose network is its only boundary.
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   wallet-service:
     build: ./wallet-service
     ports:
@@ -45,11 +58,15 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_SECRET: local-dev-only-secret-do-not-use-in-production-min-32-bytes
       LEDGER_SERVICE_URL: http://ledger-service:8082
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   ledger-service:
     build: ./ledger-service

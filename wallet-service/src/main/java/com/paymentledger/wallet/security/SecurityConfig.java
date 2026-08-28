@@ -2,6 +2,9 @@ package com.paymentledger.wallet.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentledger.wallet.api.ProblemDetailSupport;
+import com.paymentledger.wallet.ratelimit.RateLimitFilter;
+import com.paymentledger.wallet.ratelimit.RateLimitProperties;
+import com.paymentledger.wallet.ratelimit.RateLimiter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,7 +64,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                     JwtService jwtService,
                                                     AuthenticationEntryPoint authenticationEntryPoint,
-                                                    AccessDeniedHandler accessDeniedHandler) throws Exception {
+                                                    AccessDeniedHandler accessDeniedHandler,
+                                                    RateLimiter rateLimiter,
+                                                    RateLimitProperties rateLimitProperties,
+                                                    ObjectMapper objectMapper) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -80,7 +86,11 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                // After the JWT filter, because the bucket is keyed on the authenticated user and
+                // there is no principal on the context until that filter has run.
+                .addFilterAfter(new RateLimitFilter(rateLimiter, rateLimitProperties, objectMapper),
+                        JwtAuthenticationFilter.class);
 
         return http.build();
     }
